@@ -1,0 +1,23 @@
+{% extends "accounts/base_dashboard.html" %}
+{% load static %}
+
+{% block title %}Сотрудники — Shiftly{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'accounts/css/employees.css' %}">{% endblock %}
+
+{% block content %}
+  <header class="topbar employee-topbar">
+    <div><p class="eyebrow">{{ organization.name }}</p><h1>Сотрудники</h1><p class="page-description">Команда, условия оплаты и будущая история смен.</p></div>
+    <a class="add-employee-button" href="{% url 'employee-create' %}">Добавить сотрудника <span aria-hidden="true">+</span></a>
+  </header>
+  {% if messages %}{% for message in messages %}<p class="success-message" role="status">{{ message }}</p>{% endfor %}{% endif %}
+  {% if employees %}
+    <section class="employee-table" aria-label="Список сотрудников">
+      <div class="employee-row employee-table-head"><span>Сотрудник</span><span>Должность</span><span>Ставка</span><span>Процент</span></div>
+      {% for employee in employees %}
+        <a class="employee-row employee-link {% if not employee.is_active %}is-inactive{% endif %}" href="{% url 'employee-detail' employee.id %}"><div class="employee-name"><span class="employee-avatar">{{ employee.first_name|slice:":1"|upper }}</span><div><strong>{{ employee.full_name }}{% if not employee.is_active %}<small class="inactive-label">Не работает</small>{% endif %}</strong><small>{{ employee.phone }}{% if employee.email %} · {{ employee.email }}{% endif %}{% if employee.telegram_username %} · @{{ employee.telegram_username }}{% endif %}</small></div></div><span>{{ employee.position }}</span><span>{{ employee.hourly_rate|floatformat:"-2" }} ₽/ч</span><span>{{ employee.sales_percentage|floatformat:"-2" }}%</span></a>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section class="empty-state employee-empty" aria-labelledby="empty-heading"><div class="people-symbol" aria-hidden="true"><span></span><span></span></div><p class="eyebrow">Команда</p><h2 id="empty-heading">Пока никого нет</h2><p>Добавьте первого сотрудника, чтобы настроить оплату и затем поставить его в график.</p><a class="add-employee-button" href="{% url 'employee-create' %}">Добавить сотрудника <span aria-hidden="true">+</span></a></section>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,53 @@
+/* The dashboard shares the restrained black-and-yellow identity of the public entry screen. */
+:root { --ink: #101010; --sidebar: #151515; --panel: #1a1a1a; --line: #303030; --muted: #929292; --white: #f6f6f2; --yellow: #f8d54b; --interface-font: "Jost", sans-serif; }
+/* A small reset keeps layout dimensions and controls consistent across browsers. */
+* { box-sizing: border-box; }
+body { min-width: 320px; margin: 0; color: var(--white); background: var(--ink); font-family: var(--interface-font); }
+.dashboard-shell { display: grid; min-height: 100vh; grid-template-columns: 244px minmax(0, 1fr); }
+/* The sidebar anchors navigation and does not scroll away with the main workspace. */
+.sidebar { display: flex; min-height: 100vh; padding: 30px 18px 22px; flex-direction: column; border-right: 1px solid var(--line); background: var(--sidebar); }
+.brand { display: inline-flex; padding: 0 10px; align-items: center; gap: 9px; color: var(--white); font-size: 19px; font-weight: 720; letter-spacing: -.04em; text-decoration: none; }
+.brand-mark, .organization-badge { display: grid; place-items: center; color: var(--ink); background: var(--yellow); font-weight: 750; }
+.brand-mark { width: 29px; height: 29px; border-radius: 8px; font-size: 15px; }
+.navigation { display: flex; margin-top: 54px; flex-direction: column; gap: 5px; }
+.nav-item { display: flex; min-height: 42px; padding: 0 11px; align-items: center; gap: 11px; color: #b9b9b9; border-radius: 8px; font-size: 14px; text-decoration: none; }
+.nav-item.is-active { color: var(--ink); background: var(--yellow); font-weight: 650; }
+.nav-item.is-disabled { color: #696969; cursor: default; }
+.nav-item small { margin-left: auto; color: #777; font-size: 10px; }
+.nav-icon { width: 16px; color: currentColor; font-size: 16px; text-align: center; }
+.sidebar-footer { display: flex; margin-top: auto; padding: 13px 10px 0; align-items: center; gap: 9px; border-top: 1px solid var(--line); }
+.organization-badge { width: 27px; height: 27px; flex: 0 0 auto; border-radius: 50%; font-size: 12px; }
+.organization-name { overflow: hidden; color: #a3a3a3; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+/* The content column stays comfortably constrained even on very wide displays. */
+.content { width: min(100%, 1300px); padding: 52px clamp(28px, 5vw, 78px) 72px; }
+.topbar { display: flex; margin-bottom: 68px; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.eyebrow { margin: 0 0 11px; color: var(--yellow); font-size: 11px; font-weight: 720; letter-spacing: .12em; text-transform: uppercase; }
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: 0; font-size: clamp(31px, 3.2vw, 46px); font-weight: 570; letter-spacing: -.055em; line-height: 1; }
+h2 { margin-bottom: 0; font-size: 25px; font-weight: 580; letter-spacing: -.045em; }
+.profile-button { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; color: var(--ink); border: 0; border-radius: 50%; background: var(--yellow); font: inherit; font-size: 14px; font-weight: 700; }
+.today-section { margin-bottom: 56px; }
+.section-heading { display: flex; margin-bottom: 20px; align-items: end; justify-content: space-between; }
+.section-heading .eyebrow { margin-bottom: 8px; color: var(--muted); letter-spacing: .06em; }
+.live-label { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+.live-label span { width: 7px; height: 7px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 0 4px rgb(248 213 75 / 10%); }
+.summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
+.summary-card { min-height: 143px; padding: 22px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); }
+.summary-card p { margin-bottom: 18px; color: var(--muted); font-size: 13px; }
+.summary-card strong { margin-right: 6px; font-size: 37px; font-weight: 560; letter-spacing: -.06em; }
+.summary-card span { color: var(--muted); font-size: 12px; }
+.accent-card { border-color: #5a5127; background: linear-gradient(125deg, #272312, #1d1c18); }
+.accent-card strong { color: var(--yellow); }
+/* The empty state tells a new employer precisely which product action comes next. */
+.empty-state { display: flex; min-height: 310px; padding: 42px 26px; align-items: center; flex-direction: column; justify-content: center; text-align: center; border: 1px dashed #414141; border-radius: 14px; background: #151515; }
+.empty-symbol { display: grid; width: 46px; height: 46px; margin-bottom: 23px; padding: 9px; grid-template-columns: repeat(3, 1fr); gap: 4px; place-items: end center; border-radius: 12px; background: #252314; }
+.empty-symbol span { display: block; width: 6px; border-radius: 4px; background: var(--yellow); }
+.empty-symbol span:nth-child(1) { height: 11px; }.empty-symbol span:nth-child(2) { height: 19px; }.empty-symbol span:nth-child(3) { height: 27px; }
+.empty-state .eyebrow { margin-bottom: 10px; }
+.empty-state h2 { margin-bottom: 11px; }
+.empty-state > p:not(.eyebrow, .soon-message) { max-width: 410px; margin-bottom: 23px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.add-employee-button { display: inline-flex; min-height: 45px; padding: 0 15px 0 17px; align-items: center; gap: 17px; color: var(--ink); border: 0; border-radius: 8px; background: var(--yellow); cursor: pointer; font: inherit; font-size: 13px; font-weight: 720; transition: background .18s, transform .18s; }
+.add-employee-button:hover { background: #ffe477; }.add-employee-button:active { transform: translateY(1px); }.add-employee-button span { font-size: 20px; font-weight: 400; }
+.soon-message { min-height: 18px; margin: 12px 0 -18px; color: var(--muted); font-size: 12px; }
+/* On mobile, navigation becomes a compact strip and cards remain easy to scan. */
+@media (max-width: 760px) { .dashboard-shell { display: block; }.sidebar { position: sticky; top: 0; z-index: 2; min-height: auto; padding: 15px 20px 0; border-right: 0; border-bottom: 1px solid var(--line); }.navigation { margin-top: 17px; flex-direction: row; overflow-x: auto; }.nav-item { min-height: 37px; padding: 0 10px; flex: 0 0 auto; font-size: 12px; }.nav-icon, .nav-item small, .sidebar-footer { display: none; }.content { padding: 36px 20px 52px; }.topbar { margin-bottom: 46px; }.summary-grid { grid-template-columns: 1fr; }.summary-card { min-height: 112px; }.summary-card p { margin-bottom: 9px; }.today-section { margin-bottom: 38px; }.empty-state { min-height: 290px; padding: 35px 20px; } }

@@ -1,0 +1,76 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111111">
+  <title>Shiftly — смены под контролем</title>
+  {# Jost is the readable interface font for forms, navigation, and controls. #}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'accounts/css/landing.css' %}">
+</head>
+<body>
+  <main class="auth-layout">
+    <section class="brand-panel" aria-labelledby="product-title">
+      {# Decorative shapes are hidden from assistive technologies because they carry no content. #}
+      <div class="abstract-shapes" aria-hidden="true">
+        <span class="shape shape-square"></span>
+        <span class="shape shape-dot"></span>
+      </div>
+      <a class="brand" href="{% url 'landing' %}" aria-label="Shiftly: на главную">
+        <span class="brand-mark">S</span><span>shiftly</span>
+      </a>
+      <div class="brand-copy">
+        <p class="eyebrow">CRM для посменной работы</p>
+        <h1 id="product-title">Вся смена.<br><em>Под контролем.</em></h1>
+        <p class="lead">График, отработка и честный расчёт заработка — в одном месте.</p>
+      </div>
+      <p class="brand-footnote">Для команд, которые работают, пока другие отдыхают.</p>
+    </section>
+
+    <section class="form-panel" aria-label="Авторизация">
+      <div class="form-card">
+        <div class="form-heading">
+          <p class="eyebrow">Добро пожаловать</p>
+          <h2>Начнём работу</h2>
+          <p>Войдите в свой аккаунт или создайте организацию.</p>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Выбор формы">
+          <button class="tab {% if active_tab == 'login' %}is-active{% endif %}" type="button" role="tab" aria-selected="{% if active_tab == 'login' %}true{% else %}false{% endif %}" data-tab="login">Войти</button>
+          <button class="tab {% if active_tab == 'registration' %}is-active{% endif %}" type="button" role="tab" aria-selected="{% if active_tab == 'registration' %}true{% else %}false{% endif %}" data-tab="registration">Создать организацию</button>
+        </div>
+
+        <form class="auth-form {% if active_tab != 'login' %}is-hidden{% endif %}" method="post" data-panel="login" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="login">
+          {% for field in login_form %}
+            <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          {% endfor %}
+          {% for error in login_form.non_field_errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          <button class="primary-button" type="submit">Войти <span aria-hidden="true">→</span></button>
+        </form>
+
+        <form class="auth-form {% if active_tab != 'registration' %}is-hidden{% endif %}" method="post" data-panel="registration" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="form_type" value="registration">
+          {% for field in registration_form %}
+            <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<p class="field-help">{{ field.help_text|striptags }}</p>{% endif %}
+            {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          {% endfor %}
+          <button class="primary-button" type="submit">Создать организацию <span aria-hidden="true">→</span></button>
+        </form>
+        <p class="agreement">Продолжая, вы принимаете условия использования сервиса.</p>
+      </div>
+    </section>
+  </main>
+  <script src="{% static 'accounts/js/landing.js' %}"></script>
+</body>
+</html>

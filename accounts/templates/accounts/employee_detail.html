@@ -1,0 +1,14 @@
+{% extends "accounts/base_dashboard.html" %}
+{% load static %}
+
+{% block title %}{{ employee.full_name }} — Shiftly{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'accounts/css/employees.css' %}">{% endblock %}
+
+{% block content %}
+  <header class="form-topbar employee-detail-topbar"><a class="back-link" href="{% url 'employees' %}">← Все сотрудники</a><div class="detail-heading"><span class="detail-avatar">{{ employee.first_name|slice:":1"|upper }}</span><div><p class="eyebrow">{{ employee.position }}</p><h1>{{ employee.full_name }}</h1><p class="employee-status {% if not employee.is_active %}is-inactive{% endif %}"><span></span>{% if employee.is_active %}Работает{% else %}Не работает{% endif %}</p></div></div><div class="detail-actions"><a class="secondary-button" href="{% url 'employee-edit' employee.id %}">Редактировать</a>{% if employee.is_active %}<form method="post" action="{% url 'employee-deactivate' employee.id %}">{% csrf_token %}<button class="deactivate-button" type="submit">Отключить</button></form>{% endif %}</div></header>
+  {% if messages %}{% for message in messages %}<p class="success-message" role="status">{{ message }}</p>{% endfor %}{% endif %}
+  <div class="detail-grid">
+    <section class="detail-card"><p class="eyebrow">Контакты</p><dl><div><dt>Телефон</dt><dd>{{ employee.phone }}</dd></div>{% if employee.email %}<div><dt>Email</dt><dd>{{ employee.email }}</dd></div>{% endif %}{% if employee.telegram_username %}<div><dt>Telegram</dt><dd>@{{ employee.telegram_username }}</dd></div>{% endif %}</dl></section>
+    <section class="detail-card"><p class="eyebrow">Условия оплаты</p><dl><div><dt>Ставка</dt><dd>{{ employee.hourly_rate|floatformat:"-2" }} ₽ <small>в час</small></dd></div><div><dt>От продаж</dt><dd>{{ employee.sales_percentage|floatformat:"-2" }}%</dd></div></dl></section>
+  </div>
+{% endblock %}

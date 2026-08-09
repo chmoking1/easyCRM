@@ -1,0 +1,30 @@
+{% extends "accounts/base_dashboard.html" %}
+{% load static %}
+
+{% block title %}{% if is_edit %}Редактирование сотрудника{% else %}Новый сотрудник{% endif %} — Shiftly{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'accounts/css/employees.css' %}">{% endblock %}
+
+{% block content %}
+  <header class="form-topbar"><a class="back-link" href="{% if is_edit %}{% url 'employee-detail' employee.id %}{% else %}{% url 'employees' %}{% endif %}">← {% if is_edit %}Карточка сотрудника{% else %}Все сотрудники{% endif %}</a><p class="eyebrow">{{ organization.name }}</p><h1>{% if is_edit %}Редактирование сотрудника{% else %}Новый сотрудник{% endif %}</h1><p class="page-description">Укажите контактные данные и правила расчёта заработка.</p></header>
+  <form class="employee-form" method="post" novalidate>
+    {% csrf_token %}
+    {# These equal columns use the wide form area efficiently while grouping related details. #}
+    <div class="form-top-grid">
+      <section class="form-section"><h2>Основная информация</h2><div class="form-grid">
+        {# Explicit fields make this business form easy to adjust without relying on Python field order. #}
+        {% for field in form %}
+          {% if field.name == "first_name" or field.name == "last_name" or field.name == "position" %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endif %}
+        {% endfor %}
+      </div></section>
+      <section class="form-section"><div class="contact-heading"><div><h2>Контакты</h2><p>Телефон обязателен. Email и Telegram — по желанию.</p></div></div><div class="form-grid">
+        {% for field in form %}
+          {% if field.name == "phone" or field.name == "email" or field.name == "telegram_username" %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endif %}
+        {% endfor %}
+      </div></section>
+    </div>
+    <section class="form-section"><h2>Условия оплаты</h2><p>Процент от продаж можно оставить равным нулю.</p><div class="form-grid payment-grid">
+      {% for field in form %}{% if field.name == "hourly_rate" or field.name == "sales_percentage" %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endif %}{% endfor %}
+    </div></section>
+    <div class="form-actions"><a class="secondary-button" href="{% if is_edit %}{% url 'employee-detail' employee.id %}{% else %}{% url 'employees' %}{% endif %}">Отмена</a><button class="add-employee-button" type="submit">{% if is_edit %}Сохранить изменения{% else %}Добавить сотрудника <span aria-hidden="true">+</span>{% endif %}</button></div>
+  </form>
+{% endblock %}

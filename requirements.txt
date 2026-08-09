@@ -1,0 +1,5 @@
+# Long-term-support Django release selected for the CRM backend.
+Django>=5.2,<5.3
+
+# PostgreSQL driver used when the application runs outside local development.
+psycopg[binary]>=3.2,<4.0
