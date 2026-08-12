@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Чек выплаты #{{ payment.id }}</title>
+  <style>
+    /* Подключаем шрифт Arial напрямую через директиву xhtml2pdf */
+    @font-face {
+      font-family: 'ArialCustom';
+      src: url('C:/Windows/Fonts/arial.ttf');
+    }
+
+    @page { 
+      size: a4 portrait; 
+      margin: 12mm; 
+    }
+
+    body { 
+      font-family: 'ArialCustom', sans-serif; 
+      color: #111111; 
+      font-size: 10pt; 
+      line-height: 1.3; 
+    }
+
+    .header-table { 
+      width: 100%; 
+      border-bottom: 2px solid #22c55e; 
+      padding-bottom: 10px; 
+      margin-bottom: 15px; 
+    }
+    
+    .title { 
+      font-size: 16pt; 
+      font-weight: bold; 
+      color: #000000; 
+    }
+    
+    .subtitle { 
+      color: #666666; 
+      font-size: 8.5pt; 
+    }
+    
+    .info-table { 
+      width: 100%; 
+      margin-bottom: 15px; 
+    }
+    
+    .box { 
+      background-color: #f8fafc; 
+      border: 1px solid #e2e8f0; 
+      border-radius: 6px; 
+      padding: 10px; 
+    }
+    
+    .box-title { 
+      font-size: 8pt; 
+      color: #64748b; 
+      font-weight: bold; 
+      margin-bottom: 5px; 
+    }
+
+    .amount-box { 
+      background-color: #f0fdf4; 
+      border: 1px solid #bbf7d0; 
+      border-radius: 6px; 
+      padding: 12px; 
+      text-align: center; 
+      margin-bottom: 15px; 
+    }
+    
+    .amount-title { 
+      color: #166534; 
+      font-size: 9pt; 
+      font-weight: bold; 
+    }
+    
+    .amount-value { 
+      color: #15803d; 
+      font-size: 22pt; 
+      font-weight: bold; 
+    }
+
+    .data-table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 8px; 
+    }
+    
+    .data-table th { 
+      background-color: #f1f5f9; 
+      text-align: left; 
+      padding: 6px 8px; 
+      font-size: 8pt; 
+      color: #475569; 
+      border-bottom: 1px solid #cbd5e1; 
+    }
+    
+    .data-table td { 
+      padding: 6px 8px; 
+      border-bottom: 1px solid #e2e8f0; 
+      font-size: 9pt; 
+    }
+
+    .signatures-table { 
+      margin-top: 30px; 
+      width: 100%; 
+    }
+    
+    .signatures-table td { 
+      width: 50%; 
+      padding-top: 30px; 
+      border-top: 1px solid #111111; 
+      text-align: center; 
+      font-size: 8.5pt; 
+      color: #475569; 
+    }
+
+    .footer { 
+      margin-top: 25px; 
+      border-top: 1px solid #e2e8f0; 
+      padding-top: 10px; 
+      text-align: justify; 
+      color: #94a3b8; 
+      font-size: 7.5pt; 
+    }
+  </style>
+</head>
+<body>
+
+  <table class="header-table">
+    <tr>
+      <td>
+        <div class="title">{{ payment.organization.name }}</div>
+        <div class="subtitle">Официальный расчетный чек по заработной плате</div>
+      </td>
+      <td style="text-align: right;">
+        <div style="font-weight: bold; font-size: 12pt;">Квитанция № {{ payment.id }}</div>
+        <div class="subtitle">Дата: {{ payment.paid_at|date:"d.m.Y H:i" }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <table class="info-table">
+    <tr>
+      <td style="width: 48%; padding-right: 2%;">
+        <div class="box">
+          <div class="box-title">СОТРУДНИК (ПОЛУЧАТЕЛЬ)</div>
+          <strong>{{ payment.employee.full_name }}</strong><br>
+          Должность: {{ payment.employee.position|default:"Сотрудник" }}<br>
+          График выплат: {{ payment.employee.get_payout_days_display }}
+        </div>
+      </td>
+      <td style="width: 48%; padding-left: 2%;">
+        <div class="box">
+          <div class="box-title">ВЫДАНО (РАБОТОДАТЕЛЬ)</div>
+          Организация: {{ payment.organization.name }}<br>
+          Выдал: {{ payment.created_by.get_full_name|default:payment.created_by.username }}<br>
+          Заметка: {{ payment.comment|default:"Без комментариев" }}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="amount-box">
+    <div class="amount-title">ВЫПЛАЧЕННАЯ СУММА</div>
+    <div class="amount-value">{{ payment.amount }} руб.</div>
+  </div>
+
+  <div style="font-weight: bold; font-size: 9pt; margin-top: 10px;">Отработанные смены, зафиксированные в расчете:</div>
+  
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Дата смены</th>
+        <th>Время работы</th>
+        <th>Часы</th>
+        <th>Выручка</th>
+        <th style="text-align: right;">Начислено</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for shift in shifts %}
+        <tr>
+          <td>{{ shift.opened_at|date:"d.m.Y" }}</td>
+          <td>{{ shift.opened_at|date:"H:i" }} — {{ shift.closed_at|date:"H:i"|default:"..." }}</td>
+          <td>{{ shift.duration_hours }} ч.</td>
+          <td>{{ shift.total_sales }} руб.</td>
+          <td style="text-align: right; font-weight: bold;">{{ shift.calculated_payout }} руб.</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="5" style="text-align: center; color: #94a3b8;">Нет сведений о конкретных сменах</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="signatures-table">
+    <tr>
+      <td style="padding-right: 15px;">Подпись сотрудника</td>
+      <td style="padding-left: 15px;">Подпись / Печать работодателя</td>
+    </tr>
+  </table>
+
+  <div class="footer">
+    Документ сформирован автоматически в CRM-системе easyCRM {{ now|date:"d.m.Y H:i" }}. Электронный чек является подтверждением проведения денежной транзакции между работодателем и сотрудником.
+  </div>
+
+</body>
+</html>

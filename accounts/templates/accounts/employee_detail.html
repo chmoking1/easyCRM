@@ -2,13 +2,248 @@
 {% load static %}
 
 {% block title %}{{ employee.full_name }} — Shiftly{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'accounts/css/employees.css' %}">{% endblock %}
 
 {% block content %}
-  <header class="form-topbar employee-detail-topbar"><a class="back-link" href="{% url 'employees' %}">← Все сотрудники</a><div class="detail-heading"><span class="detail-avatar">{{ employee.first_name|slice:":1"|upper }}</span><div><p class="eyebrow">{{ employee.position }}</p><h1>{{ employee.full_name }}</h1><p class="employee-status {% if not employee.is_active %}is-inactive{% endif %}"><span></span>{% if employee.is_active %}Работает{% else %}Не работает{% endif %}</p></div></div><div class="detail-actions"><a class="secondary-button" href="{% url 'employee-edit' employee.id %}">Редактировать</a>{% if employee.is_active %}<form method="post" action="{% url 'employee-deactivate' employee.id %}">{% csrf_token %}<button class="deactivate-button" type="submit">Отключить</button></form>{% endif %}</div></header>
-  {% if messages %}{% for message in messages %}<p class="success-message" role="status">{{ message }}</p>{% endfor %}{% endif %}
-  <div class="detail-grid">
-    <section class="detail-card"><p class="eyebrow">Контакты</p><dl><div><dt>Телефон</dt><dd>{{ employee.phone }}</dd></div>{% if employee.email %}<div><dt>Email</dt><dd>{{ employee.email }}</dd></div>{% endif %}{% if employee.telegram_username %}<div><dt>Telegram</dt><dd>@{{ employee.telegram_username }}</dd></div>{% endif %}</dl></section>
-    <section class="detail-card"><p class="eyebrow">Условия оплаты</p><dl><div><dt>Ставка</dt><dd>{{ employee.hourly_rate|floatformat:"-2" }} ₽ <small>в час</small></dd></div><div><dt>От продаж</dt><dd>{{ employee.sales_percentage|floatformat:"-2" }}%</dd></div></dl></section>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow"><a href="{% url 'employees' %}" style="color: #a1a1aa; text-decoration: none;">← Все сотрудники</a></p>
+      <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
+        <span style="width: 48px; height: 48px; border-radius: 50%; background: #27272a; border: 1px solid rgba(255,255,255,0.1); color: #facc15; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.25rem;">
+          {{ employee.first_name|slice:":1" }}{{ employee.last_name|slice:":1" }}
+        </span>
+        <div>
+          {% if employee.position %}
+            <p class="eyebrow" style="color: #facc15; margin: 0; text-transform: uppercase; font-size: 0.75rem; font-weight: 700;">{{ employee.position }}</p>
+          {% endif %}
+          <h1 style="margin: 0; font-size: 1.75rem;">{{ employee.full_name }}</h1>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+      <a href="{% url 'employee-edit' employee.id %}" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; text-decoration: none; font-size: 0.85rem;">
+        Редактировать
+      </a>
+
+      {% if employee.is_active %}
+        <form action="{% url 'employee-deactivate' employee.id %}" method="post" style="margin: 0;">
+          {% csrf_token %}
+          <button type="button" onclick="openModal('deactivate-modal')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">
+            Отключить
+          </button>
+        </form>
+      {% endif %}
+
+      <button type="button" onclick="openModal('delete-modal')" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+        Удалить
+      </button>
+    </div>
+  </header>
+
+  <!-- Сообщения системы -->
+  {% if messages %}
+    <div style="margin-top: 1rem;">
+      {% for message in messages %}
+        <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #22c55e; padding: 0.85rem 1.25rem; border-radius: 8px; font-size: 0.9rem; margin-bottom: 1rem;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Селектор периода -->
+  <section class="today-section" style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
+    <form method="get" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1rem 1.25rem; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+      <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <span style="font-size: 0.85rem; color: #a1a1aa; font-weight: 500;">Период расчёта:</span>
+        <input type="date" name="date_from" value="{{ date_from }}" style="background: #18181b; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.85rem; color-scheme: dark;">
+        <span style="color: #a1a1aa; font-size: 0.85rem;">—</span>
+        <input type="date" name="date_to" value="{{ date_to }}" style="background: #18181b; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.85rem; color-scheme: dark;">
+        <button type="submit" class="add-employee-button" style="padding: 0.45rem 1rem; font-size: 0.85rem; cursor: pointer;">Показать</button>
+        {% if stats.has_custom_filter %}
+          <a href="{% url 'employee-detail' employee.id %}" style="color: #ef4444; text-decoration: none; font-size: 0.85rem; margin-left: 0.5rem;">Сбросить</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
+  <!-- Карточки статистики -->
+  <section class="today-section" style="margin-bottom: 2rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+      {% if stats.has_custom_filter %}
+        <div style="background: rgba(34, 197, 94, 0.06); border: 1px solid rgba(34, 197, 94, 0.3); padding: 1.25rem 1.5rem; border-radius: 12px; grid-column: 1 / -1;">
+          <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-bottom: 0.35rem;">За выбранный период ({{ date_from|default:"..." }} — {{ date_to|default:"..." }})</span>
+          <strong style="font-size: 1.8rem; color: #22c55e; display: block; line-height: 1.2;">{{ stats.custom_payout }} ₽</strong>
+          <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-top: 0.5rem;">
+            Смен: <strong>{{ stats.custom_count }}</strong> ({{ stats.custom_hours }} ч.)
+          </span>
+        </div>
+      {% endif %}
+
+      <div style="background: rgba(250, 204, 21, 0.04); border: 1px solid rgba(250, 204, 21, 0.2); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-bottom: 0.35rem;">Заработок за текущий месяц</span>
+        <strong style="font-size: 1.6rem; color: #facc15; display: block; line-height: 1.2;">{{ stats.month_payout }} ₽</strong>
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.5rem;">
+          Смен: <strong>{{ stats.month_shifts_count }}</strong> ({{ stats.month_hours }} ч.)
+        </span>
+      </div>
+
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-bottom: 0.35rem;">Заработок за всё время</span>
+        <strong style="font-size: 1.6rem; color: #fff; display: block; line-height: 1.2;">{{ stats.total_payout }} ₽</strong>
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.5rem;">
+          Смен: <strong>{{ stats.total_shifts_count }}</strong> ({{ stats.total_hours }} ч.)
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Контакты и доступ -->
+  <section class="today-section" style="margin-bottom: 2rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <p class="eyebrow" style="color: #facc15; margin-bottom: 1rem;">Контакты и Доступ</p>
+        <div style="margin-bottom: 0.85rem;">
+          <span style="font-size: 0.8rem; color: #a1a1aa; display: block; margin-bottom: 0.15rem;">Телефон</span>
+          <strong style="font-size: 1rem; color: #fff;">{{ employee.phone|default:"Не указан" }}</strong>
+        </div>
+
+        <div>
+          <span style="font-size: 0.8rem; color: #a1a1aa; display: block; margin-bottom: 0.15rem;">Логин для входа</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;">
+            <strong style="font-size: 0.95rem; color: #fff;">{{ employee.user.username }}</strong>
+            <button type="button" onclick="openModal('reset-password-modal')" style="background: rgba(250, 204, 21, 0.1); border: 1px solid rgba(250, 204, 21, 0.3); color: #facc15; padding: 0.25rem 0.65rem; border-radius: 6px; font-size: 0.75rem; font-weight: 500; cursor: pointer;">
+              Сбросить пароль
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <p class="eyebrow" style="color: #facc15; margin-bottom: 1rem;">Условия оплаты</p>
+        
+        <div style="margin-bottom: 0.75rem;">
+          <span style="font-size: 0.8rem; color: #a1a1aa; display: block;">Тип оплаты</span>
+          <strong style="font-size: 1rem; color: #fff;">{{ employee.get_pay_type_display|default:"Почасовая ставка" }}</strong>
+        </div>
+
+        <div style="margin-bottom: 0.75rem;">
+          <span style="font-size: 0.8rem; color: #a1a1aa; display: block;">Ставка в час</span>
+          <strong style="font-size: 1rem; color: #fff;">{{ employee.hourly_rate }} ₽ / ч</strong>
+        </div>
+
+        <div style="margin-bottom: 0.75rem;">
+          <span style="font-size: 0.8rem; color: #a1a1aa; display: block;">Процент от продаж</span>
+          <strong style="font-size: 1rem; color: #fff;">{{ employee.sales_percentage }}%</strong>
+        </div>
+
+        <div>
+          <span style="font-size: 0.8rem; color: #a1a1aa; display: block;">График выплат</span>
+          <strong style="font-size: 1rem; color: #fff;">{{ employee.get_payout_frequency_display|default:"Раз в неделю" }}</strong>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Недавние смены -->
+  <section class="today-section">
+    <div class="section-heading" style="margin-bottom: 1rem;">
+      <div>
+        <p class="eyebrow" style="text-transform: uppercase; font-size: 0.75rem; color: #a1a1aa; margin: 0;">История работы</p>
+        <h3 style="font-size: 1.1rem; margin: 0.2rem 0 0 0; color: #fff;">Недавние смены</h3>
+      </div>
+    </div>
+
+    {% if recent_shifts %}
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {% for shift in recent_shifts %}
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 0.85rem 1.25rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <strong style="color: #fff; font-size: 0.95rem; display: block;">{{ shift.opened_at|date:"d.m.Y (H:i)" }} — {% if shift.closed_at %}{{ shift.closed_at|date:"H:i" }}{% else %}...{% endif %}</strong>
+              <span style="color: #a1a1aa; font-size: 0.8rem;">Отработано: {{ shift.duration_hours }} ч.</span>
+            </div>
+            <div style="text-align: right;">
+              <span style="display: block; font-weight: 600; color: #22c55e; font-size: 0.95rem;">+{{ shift.calculated_payout }} ₽</span>
+              <span style="font-size: 0.8rem; color: #a1a1aa;">Выручка: {{ shift.total_sales }} ₽</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); padding: 1.5rem; text-align: center; border-radius: 8px; color: #a1a1aa; font-size: 0.9rem;">
+        У этого сотрудника пока нет завершённых смен.
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- Модальное окно ПОЛНОГО УДАЛЕНИЯ -->
+  <div id="delete-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 1000;">
+    <div style="background: #18181b; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+      <h3 style="margin: 0 0 0.5rem 0; color: #fff; font-size: 1.1rem;">Удалить сотрудника?</h3>
+      <p style="color: #a1a1aa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 1.5rem;">
+        Вы действительно хотите безвозвратно удалить профиль сотрудника <strong style="color: #fff;">{{ employee.full_name }}</strong> и его аккаунт?
+      </p>
+
+      <form action="{% url 'employee-delete' employee.id %}" method="post" style="display: flex; justify-content: flex-end; gap: 0.75rem; margin: 0;">
+        {% csrf_token %}
+        <button type="button" onclick="closeModal('delete-modal')" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+          Отмена
+        </button>
+        <button type="submit" style="background: #ef4444; border: none; color: #fff; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+          Да, удалить
+        </button>
+      </form>
+    </div>
   </div>
+
+  <!-- Модальное окно ОТКЛЮЧЕНИЯ -->
+  {% if employee.is_active %}
+    <div id="deactivate-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 1000;">
+      <div style="background: #18181b; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 400px;">
+        <h3 style="margin: 0 0 0.5rem 0; color: #fff; font-size: 1.1rem;">Отключить сотрудника?</h3>
+        <p style="color: #a1a1aa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 1.5rem;">
+          Сотрудник <strong style="color: #fff;">{{ employee.full_name }}</strong> больше не сможет войти в систему, но история его смен останется в отчётах.
+        </p>
+
+        <form action="{% url 'employee-deactivate' employee.id %}" method="post" style="display: flex; justify-content: flex-end; gap: 0.75rem; margin: 0;">
+          {% csrf_token %}
+          <button type="button" onclick="closeModal('deactivate-modal')" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+            Отмена
+          </button>
+          <button type="submit" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+            Отключить
+          </button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Модальное окно СБРОСА ПАРОЛЯ -->
+  <div id="reset-password-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 1000;">
+    <div style="background: #18181b; border: 1px solid rgba(250, 204, 21, 0.3); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 400px;">
+      <h3 style="margin: 0 0 0.5rem 0; color: #fff; font-size: 1.1rem;">Сбросить пароль?</h3>
+      <p style="color: #a1a1aa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 1.5rem;">
+        Для сотрудника <strong style="color: #fff;">{{ employee.full_name }}</strong> будет сгенерирован новый пароль.
+      </p>
+
+      <form action="{% url 'employee-reset-password' employee.id %}" method="post" style="display: flex; justify-content: flex-end; gap: 0.75rem; margin: 0;">
+        {% csrf_token %}
+        <button type="button" onclick="closeModal('reset-password-modal')" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+          Отмена
+        </button>
+        <button type="submit" style="background: #facc15; border: none; color: #000; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+          Сбросить
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function openModal(id) {
+      document.getElementById(id).style.display = 'flex';
+    }
+    function closeModal(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+  </script>
 {% endblock %}

@@ -1,0 +1,661 @@
+{% extends "accounts/base_dashboard.html" %}
+{% load static %}
+
+{% block title %}Зарплата и Выплаты — easyCRM{% endblock %}
+
+{% block content %}
+  <header class="topbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <div>
+      <p class="eyebrow">Финансовый учёт</p>
+      <h1 style="margin: 0;">Зарплата и Выплаты</h1>
+    </div>
+    <div>
+      <a href="{% url 'export-payroll' %}" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: #fff; text-decoration: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.95rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.5rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+        Скачать отчёт (CSV)
+      </a>
+    </div>
+  </header>
+
+  {% if messages %}
+    <div style="margin-bottom: 1.5rem;">
+      {% for message in messages %}
+        <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #22c55e; padding: 1rem 1.25rem; border-radius: 8px; font-size: 1rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <span>{{ message|safe }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Трехколоночная сводка метрик -->
+  <section class="today-section" style="margin-bottom: 2rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+      
+      <!-- 1. Текущий долг -->
+      <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.25); padding: 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.9rem; display: block; margin-bottom: 0.35rem;">Текущая задолженность к выплате</span>
+        <strong style="font-size: 2rem; color: #ef4444; display: block; line-height: 1.2;">{{ total_unpaid_sum }} ₽</strong>
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-top: 0.5rem;">С учётом смен, премий и штрафов</span>
+      </div>
+
+      <!-- 2. Выплачено -->
+      <div style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.25); padding: 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.9rem; display: block; margin-bottom: 0.35rem;">Выплачено за этот месяц</span>
+        <strong style="font-size: 2rem; color: #22c55e; display: block; line-height: 1.2;">{{ total_paid_this_month }} ₽</strong>
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-top: 0.5rem;">С учетом всех закрытых ведомостей</span>
+      </div>
+
+      <!-- 3. НОВАЯ КАРТОЧКА: Корректировки (Штрафы / Премии) -->
+      <div style="background: rgba(250, 204, 21, 0.04); border: 1px solid rgba(250, 204, 21, 0.25); padding: 1.25rem 1.5rem; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <span style="color: #a1a1aa; font-size: 0.9rem;">Корректировки за месяц</span>
+            <button type="button" onclick="openAdjustmentModal()" style="background: #facc15; color: #000; font-weight: 600; border: none; padding: 0.35rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem; transition: transform 0.15s ease;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+              Штраф / Премия
+            </button>
+          </div>
+
+          <div style="display: flex; gap: 1.25rem; margin-top: 0.75rem;">
+            <div>
+              <span style="color: #a1a1aa; font-size: 0.78rem; display: block;">Премии</span>
+              <strong style="color: #22c55e; font-size: 1.25rem;">+{{ month_bonuses }} ₽</strong>
+            </div>
+            <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 1.25rem;">
+              <span style="color: #a1a1aa; font-size: 0.78rem; display: block;">Штрафы</span>
+              <strong style="color: #ef4444; font-size: 1.25rem;">-{{ month_penalties }} ₽</strong>
+            </div>
+          </div>
+        </div>
+
+        <a href="javascript:void(0)" onclick="openAdjustmentModal('history')" style="color: #facc15; font-size: 0.8rem; text-decoration: underline; margin-top: 0.75rem; display: inline-block;">
+          Посмотреть историю корректировок →
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Блок сотрудников, у которых день выплаты СЕГОДНЯ -->
+  {% if due_today_data %}
+    <section style="margin-bottom: 2rem;">
+      <div style="background: rgba(250, 204, 21, 0.04); border: 1px solid rgba(250, 204, 21, 0.3); border-radius: 12px; padding: 1.25rem 1.5rem;">
+        <div style="margin-bottom: 1rem;">
+          <h3 style="margin: 0; color: #facc15; font-size: 1.15rem; font-weight: 600;">
+            Требуется выплата по графику ({{ due_today_data|length }})
+          </h3>
+          <p style="margin: 0.25rem 0 0 0; color: #a1a1aa; font-size: 0.85rem;">
+            У этих сотрудников сегодня плановый день расчёта и есть накопившийся долг.
+          </p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          {% for item in due_today_data %}
+            <div style="background: #18181b; border: 1px solid rgba(255,255,255,0.08); padding: 1rem 1.25rem; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <a href="javascript:void(0)" onclick="openHistoryModal('{{ item.employee.id }}')" class="emp-name-link" style="color: #fff; font-weight: 600; text-decoration: none; font-size: 1rem; display: block;">
+                  {{ item.employee.full_name }}
+                </a>
+                <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-top: 0.2rem;">
+                  {{ item.employee.position|default:"Сотрудник" }} • {{ item.employee.get_payout_days_display }}
+                </span>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 1.5rem;">
+                <div style="text-align: right;">
+                  <span style="color: #a1a1aa; font-size: 0.8rem; display: block;">К выплате</span>
+                  <strong style="color: #facc15; font-size: 1.15rem;">{{ item.unpaid_sum }} ₽</strong>
+                </div>
+
+                <button type="button" onclick="openPaymentModal('{{ item.employee.id }}', '{{ item.employee.full_name|escapejs }}', '{{ item.unpaid_sum }}')" style="background: #22c55e; color: #000; font-weight: 600; border: none; padding: 0.55rem 1.1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                  Выплатить
+                </button>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
+  <!-- Поиск и фильтры -->
+  <section style="margin-bottom: 1.25rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; position: relative; z-index: 10;">
+    <div style="flex: 1; min-width: 240px;">
+      <input type="text" id="search-input" onkeyup="filterPayrollTable()" placeholder="Поиск по имени или должности..." style="width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 0.75rem 1rem; border-radius: 8px; font-size: 1rem; outline: none;">
+    </div>
+
+    <!-- Фильтр по статусу долга -->
+    <div class="custom-dropdown" style="position: relative; min-width: 220px;">
+      <div class="dropdown-trigger" onclick="toggleDropdown('status-dropdown-menu')" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 0.75rem 1rem; border-radius: 8px; font-size: 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+        <span id="status-selected-label">Все статусы</span>
+        <span style="font-size: 0.75rem; color: #a1a1aa; margin-left: 0.5rem;">▼</span>
+      </div>
+      <div id="status-dropdown-menu" class="dropdown-menu-list" style="display: none; position: absolute; top: calc(100% + 6px); left: 0; width: 100%; background: #121212; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 0.35rem; box-shadow: 0 12px 28px rgba(0,0,0,0.6); z-index: 100;">
+        <div class="dropdown-item" onclick="selectFilter('status', 'all', 'Все статусы')" style="padding: 0.65rem 0.75rem; color: #fff; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">Все статусы</div>
+        <div class="dropdown-item" onclick="selectFilter('status', 'debt', 'Только с задолженностью')" style="padding: 0.65rem 0.75rem; color: #fff; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">Только с задолженностью</div>
+        <div class="dropdown-item" onclick="selectFilter('status', 'paid', 'Рассчитанные')" style="padding: 0.65rem 0.75rem; color: #fff; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">Рассчитанные</div>
+      </div>
+    </div>
+
+    <!-- Фильтр по графику выплат -->
+    <div class="custom-dropdown" style="position: relative; min-width: 220px;">
+      <div class="dropdown-trigger" onclick="toggleDropdown('frequency-dropdown-menu')" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 0.75rem 1rem; border-radius: 8px; font-size: 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+        <span id="frequency-selected-label">Все графики выплат</span>
+        <span style="font-size: 0.75rem; color: #a1a1aa; margin-left: 0.5rem;">▼</span>
+      </div>
+      <div id="frequency-dropdown-menu" class="dropdown-menu-list" style="display: none; position: absolute; top: calc(100% + 6px); left: 0; width: 100%; background: #121212; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 0.35rem; box-shadow: 0 12px 28px rgba(0,0,0,0.6); z-index: 100;">
+        <div class="dropdown-item" onclick="selectFilter('frequency', 'all', 'Все графики выплат')" style="padding: 0.65rem 0.75rem; color: #fff; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">Все графики выплат</div>
+        <div class="dropdown-item" onclick="selectFilter('frequency', 'weekly', 'Раз в неделю')" style="padding: 0.65rem 0.75rem; color: #fff; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">Раз в неделю</div>
+        <div class="dropdown-item" onclick="selectFilter('frequency', 'biweekly', '2 раза в месяц')" style="padding: 0.65rem 0.75rem; color: #fff; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">2 раза в месяц</div>
+        <div class="dropdown-item" onclick="selectFilter('frequency', 'monthly', 'Раз в месяц')" style="padding: 0.65rem 0.75rem; color: #fff; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">Раз в месяц</div>
+      </div>
+    </div>
+  </section>
+
+  <input type="hidden" id="status-filter-val" value="all">
+  <input type="hidden" id="frequency-filter-val" value="all">
+
+  <!-- Таблица ведомости выплат -->
+  <section class="today-section">
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden;">
+      <table id="payroll-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 1rem;">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: #a1a1aa; font-size: 0.9rem; text-transform: uppercase;">
+            <th style="padding: 1.25rem;">Сотрудник</th>
+            <th style="padding: 1.25rem;">График выплат</th>
+            <th style="padding: 1.25rem;">Неоплачено смен</th>
+            <th style="padding: 1.25rem;">К выплате</th>
+            <th style="padding: 1.25rem;">Последняя выплата</th>
+            <th style="padding: 1.25rem; text-align: right;">Действие</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in payroll_data %}
+            <tr class="payroll-row" 
+                data-name="{{ item.employee.full_name|lower }}" 
+                data-position="{{ item.employee.position|default:'Сотрудник'|lower }}"
+                data-has-debt="{% if item.unpaid_sum > 0 %}true{% else %}false{% endif %}"
+                data-frequency="{{ item.employee.payout_frequency|default:'weekly' }}"
+                style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 1.25rem;">
+                <a href="javascript:void(0)" onclick="openHistoryModal('{{ item.employee.id }}')" class="emp-name-link" style="color: #fff; font-weight: 600; text-decoration: none; display: block;">
+                  {{ item.employee.full_name }}
+                </a>
+                <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-top: 0.2rem;">{{ item.employee.position|default:"Сотрудник" }}</span>
+              </td>
+              <td style="padding: 1.25rem; color: #a1a1aa;">
+                {{ item.employee.get_payout_days_display|default:"Не указан" }}
+              </td>
+              <td style="padding: 1.25rem; color: #fff;">
+                <strong>{{ item.unpaid_count }}</strong> смен
+              </td>
+              <td style="padding: 1.25rem;">
+                <strong style="font-size: 1.15rem; color: {% if item.unpaid_sum > 0 %}#facc15{% else %}#a1a1aa{% endif %};">
+                  {{ item.unpaid_sum }} ₽
+                </strong>
+              </td>
+              <td style="padding: 1.25rem; color: #a1a1aa; font-size: 0.95rem;">
+                {% if item.last_payment %}
+                  <a href="javascript:void(0)" onclick="openHistoryModal('{{ item.employee.id }}')" style="color: #a1a1aa; text-decoration: underline;">
+                    {{ item.last_payment.paid_at|date:"d.m.Y" }} ({{ item.last_payment.amount }} ₽)
+                  </a>
+                {% else %}
+                  Нет выплат
+                {% endif %}
+              </td>
+              <td style="padding: 1.25rem; text-align: right;">
+                {% if item.unpaid_sum > 0 %}
+                  <button type="button" onclick="openPaymentModal('{{ item.employee.id }}', '{{ item.employee.full_name|escapejs }}', '{{ item.unpaid_sum }}')" style="background: #22c55e; color: #000; font-weight: 600; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.95rem;">
+                    Выплатить
+                  </button>
+                {% else %}
+                  {% if item.last_payment %}
+                    <a href="{% url 'download-payment-receipt' item.last_payment.id %}" target="_blank" title="Скачать чек последней выплаты" style="color: #22c55e; font-size: 0.95rem; font-weight: 500; text-decoration: underline;">
+                      Рассчитан
+                    </a>
+                  {% else %}
+                    <span style="color: #22c55e; font-size: 0.95rem; font-weight: 500;">Рассчитан</span>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          <tr id="no-results-row" style="display: none;">
+            <td colspan="6" style="padding: 2.5rem; text-align: center; color: #a1a1aa; font-size: 1rem;">
+              Сотрудники по выбранным фильтрам не найдены.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Модальное окно Выписки и Истории ШТРАФОВ / ПРЕМИЙ -->
+  <div id="adj-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 1000;">
+    <div style="background: #18181b; border: 1px solid rgba(250, 204, 21, 0.3); border-radius: 12px; padding: 2rem; width: 100%; max-width: 540px; max-height: 90vh; overflow-y: auto;">
+      
+      <!-- Переключатель вкладок -->
+      <div style="display: flex; gap: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
+        <button type="button" id="tab-add-btn" onclick="switchAdjTab('add')" style="background: transparent; border: none; color: #facc15; font-weight: 600; font-size: 1rem; cursor: pointer; border-bottom: 2px solid #facc15; padding-bottom: 0.25rem;">
+          Выписать штраф/премию
+        </button>
+        <button type="button" id="tab-history-btn" onclick="switchAdjTab('history')" style="background: transparent; border: none; color: #a1a1aa; font-weight: 500; font-size: 1rem; cursor: pointer; padding-bottom: 0.25rem;">
+          История корректировок
+        </button>
+      </div>
+
+      <!-- Форма создания -->
+      <div id="adj-tab-add">
+        <form id="adj-form" onsubmit="submitAdjustment(event)" style="display: flex; flex-direction: column; gap: 1.1rem;">
+          <div>
+            <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Сотрудник</label>
+            <select id="adj-employee-id" required style="width: 100%; background: #09090b; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.75rem; border-radius: 6px; font-size: 0.95rem; outline: none;">
+              <option value="" disabled selected>Выберите сотрудника...</option>
+              {% for emp in employees %}
+                <option value="{{ emp.id }}">{{ emp.full_name }} ({{ emp.position|default:"Сотрудник" }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Тип операции</label>
+            <div style="display: flex; gap: 1rem;">
+              <label style="flex: 1; background: #09090b; border: 1px solid rgba(34, 197, 94, 0.4); padding: 0.65rem; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; color: #22c55e; font-weight: 600;">
+                <input type="radio" name="adj_type_radio" value="bonus" checked style="accent-color: #22c55e;"> Премия
+              </label>
+              <label style="flex: 1; background: #09090b; border: 1px solid rgba(239, 68, 68, 0.4); padding: 0.65rem; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; color: #ef4444; font-weight: 600;">
+                <input type="radio" name="adj_type_radio" value="penalty" style="accent-color: #ef4444;"> Штраф
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Сумма (₽)</label>
+            <input type="number" step="0.01" id="adj-amount-input" placeholder="Например: 500" required style="width: 100%; background: #09090b; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.75rem; border-radius: 6px; font-size: 1.1rem; outline: none;">
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Быстрый выбор причины</label>
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+              <span onclick="setReason('Опоздание на смену')" style="background: rgba(255,255,255,0.06); color: #a1a1aa; font-size: 0.8rem; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">Опоздание</span>
+              <span onclick="setReason('Недостача в кассе')" style="background: rgba(255,255,255,0.06); color: #a1a1aa; font-size: 0.8rem; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">Недостача</span>
+              <span onclick="setReason('Битая посуда')" style="background: rgba(255,255,255,0.06); color: #a1a1aa; font-size: 0.8rem; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">Битая посуда</span>
+              <span onclick="setReason('Перевыполнение плана')" style="background: rgba(255,255,255,0.06); color: #22c55e; font-size: 0.8rem; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">Выполнение плана</span>
+              <span onclick="setReason('Чаевые / Бонус')" style="background: rgba(255,255,255,0.06); color: #22c55e; font-size: 0.8rem; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">Чаевые</span>
+            </div>
+            <input type="text" id="adj-reason-input" placeholder="Введите причину..." required style="width: 100%; background: #09090b; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.75rem; border-radius: 6px; font-size: 0.95rem; outline: none;">
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.75rem;">
+            <button type="button" onclick="closeAdjustmentModal()" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer;">Отмена</button>
+            <button type="submit" style="background: #facc15; border: none; color: #000; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer; font-weight: 600;">Сохранить</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- История корректировок -->
+      <div id="adj-tab-history" style="display: none;">
+        <div id="adj-history-list" style="font-size: 0.9rem;">Загрузка...</div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem;">
+          <button type="button" onclick="closeAdjustmentModal()" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer;">Закрыть</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Модальное окно Выплаты -->
+  <div id="payment-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 1000;">
+    <div style="background: #18181b; border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 12px; padding: 2rem; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto;">
+      <h3 style="margin: 0 0 0.5rem 0; color: #fff; font-size: 1.25rem;">Подтверждение выплаты</h3>
+      <p style="color: #a1a1aa; font-size: 0.95rem; margin-bottom: 1.25rem;">
+        Сотрудник: <strong id="modal-employee-name" style="color: #fff;">-</strong>
+      </p>
+
+      <div style="background: #09090b; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-bottom: 0.5rem;">Детализация расчёта к выплате:</span>
+        <div id="payout-shifts-list" style="font-size: 0.9rem; color: #fff; margin-bottom: 0.75rem;">
+          Загрузка...
+        </div>
+        <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem; display: flex; justify-content: space-between; font-size: 0.95rem;">
+          <span style="color: #a1a1aa;">Фактическая задолженность:</span>
+          <strong id="modal-calculated-debt" style="color: #facc15;">0.00 ₽</strong>
+        </div>
+      </div>
+
+      <form id="payment-form" method="post" action="" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        {% csrf_token %}
+        <div>
+          <label style="display: block; font-size: 0.9rem; color: #a1a1aa; margin-bottom: 0.35rem;">Сумма выплаты (₽)</label>
+          <input type="number" step="0.01" name="amount" id="modal-amount-input" required style="width: 100%; background: #09090b; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.75rem; border-radius: 6px; font-size: 1.15rem;">
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 0.9rem; color: #a1a1aa; margin-bottom: 0.35rem;">Заметка (необязательно)</label>
+          <input type="text" name="comment" placeholder="Например: Расчет за неделю" style="width: 100%; background: #09090b; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.75rem; border-radius: 6px; font-size: 0.95rem;">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
+          <button type="button" onclick="closePaymentModal()" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer; font-size: 0.95rem;">Отмена</button>
+          <button type="submit" style="background: #22c55e; border: none; color: #000; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer; font-size: 0.95rem; font-weight: 600;">Подтвердить выплату</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно Истории выплат -->
+  <div id="history-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 1000;">
+    <div style="background: #18181b; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 2rem; width: 100%; max-width: 560px; max-height: 80vh; display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <h3 style="margin: 0; color: #fff; font-size: 1.25rem;">История выплат: <span id="history-employee-name" style="color: #22c55e;">-</span></h3>
+        <button type="button" onclick="closeHistoryModal()" style="background: transparent; border: none; color: #a1a1aa; font-size: 1.5rem; cursor: pointer;">&times;</button>
+      </div>
+
+      <div id="history-content" style="overflow-y: auto; flex: 1; padding-right: 0.5rem;">
+        <p style="color: #a1a1aa; font-size: 0.95rem; text-align: center; padding: 1rem;">Загрузка истории...</p>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem;">
+        <button type="button" onclick="closeHistoryModal()" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 0.6rem 1.25rem; border-radius: 6px; cursor: pointer; font-size: 0.95rem;">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .dropdown-item:hover {
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: #fff !important;
+    }
+    .emp-name-link:hover {
+      color: #22c55e !important;
+    }
+  </style>
+
+  <script>
+    function openAdjustmentModal(defaultTab = 'add') {
+      document.getElementById('adj-modal').style.display = 'flex';
+      switchAdjTab(defaultTab);
+    }
+
+    function closeAdjustmentModal() {
+      document.getElementById('adj-modal').style.display = 'none';
+    }
+
+    function switchAdjTab(tab) {
+      const addTab = document.getElementById('adj-tab-add');
+      const historyTab = document.getElementById('adj-tab-history');
+      const addBtn = document.getElementById('tab-add-btn');
+      const historyBtn = document.getElementById('tab-history-btn');
+
+      if (tab === 'add') {
+        addTab.style.display = 'block';
+        historyTab.style.display = 'none';
+        addBtn.style.color = '#facc15';
+        addBtn.style.borderBottom = '2px solid #facc15';
+        historyBtn.style.color = '#a1a1aa';
+        historyBtn.style.borderBottom = 'none';
+      } else {
+        addTab.style.display = 'none';
+        historyTab.style.display = 'block';
+        historyBtn.style.color = '#facc15';
+        historyBtn.style.borderBottom = '2px solid #facc15';
+        addBtn.style.color = '#a1a1aa';
+        addBtn.style.borderBottom = 'none';
+        loadAdjustmentsHistory();
+      }
+    }
+
+    function setReason(reason) {
+      document.getElementById('adj-reason-input').value = reason;
+    }
+
+    function submitAdjustment(e) {
+      e.preventDefault();
+      const empId = document.getElementById('adj-employee-id').value;
+      const type = document.querySelector('input[name="adj_type_radio"]:checked').value;
+      const amount = document.getElementById('adj-amount-input').value;
+      const reason = document.getElementById('adj-reason-input').value;
+
+      const formData = new FormData();
+      formData.append('employee_id', empId);
+      formData.append('adjustment_type', type);
+      formData.append('amount', amount);
+      formData.append('reason', reason);
+
+      fetch('/shifts/api/adjustments/add/', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'ok') {
+          closeAdjustmentModal();
+          location.reload();
+        } else {
+          alert(data.error || 'Ошибка при сохранении');
+        }
+      })
+      .catch(() => alert('Ошибка соединения с сервером'));
+    }
+
+    function loadAdjustmentsHistory() {
+      const list = document.getElementById('adj-history-list');
+      list.innerHTML = '<p style="color: #a1a1aa; text-align: center; padding: 1rem;">Загрузка...</p>';
+
+      fetch('/shifts/api/adjustments/list/')
+        .then(res => res.json())
+        .then(data => {
+          if (!data.adjustments || data.adjustments.length === 0) {
+            list.innerHTML = '<p style="color: #a1a1aa; text-align: center; padding: 1rem;">Нет выписанных штрафов или премий</p>';
+            return;
+          }
+
+          let html = '<table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">';
+          html += '<thead><tr style="color: #a1a1aa; border-bottom: 1px solid rgba(255,255,255,0.1);"><th style="padding: 0.5rem;">Дата</th><th style="padding: 0.5rem;">Сотрудник</th><th style="padding: 0.5rem;">Причина</th><th style="padding: 0.5rem; text-align: right;">Сумма</th></tr></thead><tbody>';
+
+          data.adjustments.forEach(item => {
+            const isBonus = item.type === 'bonus';
+            const sign = isBonus ? '+' : '-';
+            const color = isBonus ? '#22c55e' : '#ef4444';
+
+            html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 0.6rem 0.5rem; color: #a1a1aa;">${item.created_at}</td>
+              <td style="padding: 0.6rem 0.5rem; color: #fff; font-weight: 500;">${item.employee_name}</td>
+              <td style="padding: 0.6rem 0.5rem; color: #a1a1aa;">${item.reason}</td>
+              <td style="padding: 0.6rem 0.5rem; text-align: right; color: ${color}; font-weight: 600;">${sign}${item.amount} ₽</td>
+            </tr>`;
+          });
+
+          html += '</tbody></table>';
+          list.innerHTML = html;
+        });
+    }
+
+    function openPaymentModal(employeeId, employeeName, amount) {
+      document.getElementById('modal-employee-name').innerText = employeeName;
+      const paymentModal = document.getElementById('payment-modal');
+      const shiftsList = document.getElementById('payout-shifts-list');
+      const debtEl = document.getElementById('modal-calculated-debt');
+      const amountInput = document.getElementById('modal-amount-input');
+
+      document.getElementById('payment-form').action = "/shifts/payroll/pay/" + employeeId + "/";
+      shiftsList.innerHTML = '<span style="color: #a1a1aa;">Загрузка деталей...</span>';
+      paymentModal.style.display = 'flex';
+
+      fetch('/shifts/payroll/details/' + employeeId + '/')
+        .then(res => res.json())
+        .then(data => {
+          // Выставляем предзаполненную задолженность (Смены + Премии - Штрафы)
+          const calculatedDebt = data.debt ? String(data.debt).replace(',', '.') : '0.00';
+          amountInput.value = calculatedDebt;
+          debtEl.innerText = calculatedDebt + ' ₽';
+
+          let html = '';
+
+          // 1. Начислено за смены
+          if (data.shifts && data.shifts.length > 0) {
+            html += '<div style="margin-bottom: 0.35rem; color: #fff; font-weight: 600;">Начислено за смены:</div>';
+            html += '<ul style="margin: 0 0 0.75rem 0; padding-left: 1.2rem; color: #a1a1aa; font-size: 0.85rem;">';
+            data.shifts.forEach(s => {
+              html += `<li style="margin-bottom: 0.25rem;">${s.date} (${s.time}) — <strong style="color: #fff;">${s.payout} ₽</strong></li>`;
+            });
+            html += '</ul>';
+          }
+
+          // 2. Наглядный вывод ПРЕМИЙ и ШТРАФОВ
+          if (data.adjustments && data.adjustments.length > 0) {
+            html += '<div style="margin-bottom: 0.35rem; color: #fff; font-weight: 600; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.5rem;">Корректировки (премии и удержания):</div>';
+            html += '<ul style="margin: 0 0 0.5rem 0; padding-left: 1.2rem; font-size: 0.85rem;">';
+            
+            data.adjustments.forEach(adj => {
+              const isBonus = adj.type === 'bonus';
+              const color = isBonus ? '#22c55e' : '#ef4444';
+              const sign = isBonus ? '+' : '-';
+              const label = adj.type_label || (isBonus ? 'Премия' : 'Штраф');
+              
+              html += `<li style="margin-bottom: 0.25rem; color: ${color};">
+                <strong>${sign}${adj.amount} ₽</strong> (${label}): <span style="color: #a1a1aa;">${adj.reason}</span>
+              </li>`;
+            });
+            
+            html += '</ul>';
+          }
+
+          if (!html) {
+            html = '<span style="color: #a1a1aa;">Нет зафиксированных нерассчитанных смен или штрафов.</span>';
+          }
+
+          shiftsList.innerHTML = html;
+        })
+        .catch(() => {
+          shiftsList.innerHTML = '<span style="color: #ef4444;">Ошибка загрузки деталей</span>';
+        });
+    }
+
+    function closePaymentModal() {
+      document.getElementById('payment-modal').style.display = 'none';
+    }
+
+    function openHistoryModal(employeeId) {
+      const modal = document.getElementById('history-modal');
+      const content = document.getElementById('history-content');
+      const nameEl = document.getElementById('history-employee-name');
+
+      nameEl.innerText = "Загрузка...";
+      content.innerHTML = '<p style="color: #a1a1aa; font-size: 0.95rem; text-align: center; padding: 1rem;">Загрузка данных...</p>';
+      modal.style.display = 'flex';
+
+      fetch('/shifts/payroll/history/' + employeeId + '/')
+        .then(response => response.json())
+        .then(data => {
+          nameEl.innerText = data.employee_name;
+          if (!data.payments || data.payments.length === 0) {
+            content.innerHTML = '<p style="color: #a1a1aa; font-size: 0.95rem; text-align: center; padding: 1.5rem;">Выплат пока не было.</p>';
+            return;
+          }
+
+          let html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.95rem; text-align: left;">';
+          html += '<thead><tr style="color: #a1a1aa; border-bottom: 1px solid rgba(255,255,255,0.1);"><th style="padding: 0.75rem;">Дата</th><th style="padding: 0.75rem;">Сумма</th><th style="padding: 0.75rem;">Заметка</th><th style="padding: 0.75rem; text-align: right;">Документ</th></tr></thead><tbody>';
+
+          data.payments.forEach(p => {
+            html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 0.85rem 0.75rem; color: #a1a1aa;">${p.paid_at}</td>
+              <td style="padding: 0.85rem 0.75rem; color: #22c55e; font-weight: 600;">+${p.amount} ₽</td>
+              <td style="padding: 0.85rem 0.75rem; color: #fff;">${p.comment}</td>
+              <td style="padding: 0.85rem 0.75rem; text-align: right;">
+                <a href="/shifts/payroll/receipt/${p.id}/pdf/" target="_blank" style="color: #facc15; text-decoration: underline; font-size: 0.85rem; font-weight: 500;">
+                  PDF чек
+                </a>
+              </td>
+            </tr>`;
+          });
+
+          html += '</tbody></table>';
+          content.innerHTML = html;
+        })
+        .catch(err => {
+          content.innerHTML = '<p style="color: #ef4444; font-size: 0.95rem; text-align: center; padding: 1.5rem;">Ошибка загрузки истории.</p>';
+        });
+    }
+
+    function closeHistoryModal() {
+      document.getElementById('history-modal').style.display = 'none';
+    }
+
+    function toggleDropdown(menuId) {
+      const targetMenu = document.getElementById(menuId);
+      const isVisible = targetMenu.style.display === 'block';
+      
+      document.querySelectorAll('.dropdown-menu-list').forEach(menu => {
+        menu.style.display = 'none';
+      });
+
+      if (!isVisible) {
+        targetMenu.style.display = 'block';
+      }
+    }
+
+    function selectFilter(type, value, label) {
+      if (type === 'status') {
+        document.getElementById('status-filter-val').value = value;
+        document.getElementById('status-selected-label').innerText = label;
+        document.getElementById('status-dropdown-menu').style.display = 'none';
+      } else if (type === 'frequency') {
+        document.getElementById('frequency-filter-val').value = value;
+        document.getElementById('frequency-selected-label').innerText = label;
+        document.getElementById('frequency-dropdown-menu').style.display = 'none';
+      }
+      filterPayrollTable();
+    }
+
+    document.addEventListener('click', function(event) {
+      if (!event.target.closest('.custom-dropdown')) {
+        document.querySelectorAll('.dropdown-menu-list').forEach(menu => {
+          menu.style.display = 'none';
+        });
+      }
+    });
+
+    function filterPayrollTable() {
+      const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+      const statusFilter = document.getElementById('status-filter-val').value;
+      const frequencyFilter = document.getElementById('frequency-filter-val').value;
+
+      const rows = document.querySelectorAll('.payroll-row');
+      let visibleCount = 0;
+
+      rows.forEach(row => {
+        const name = row.getAttribute('data-name') || '';
+        const position = row.getAttribute('data-position') || '';
+        const hasDebt = row.getAttribute('data-has-debt') === 'true';
+        const frequency = row.getAttribute('data-frequency') || '';
+
+        const matchesSearch = name.includes(searchQuery) || position.includes(searchQuery);
+
+        let matchesStatus = true;
+        if (statusFilter === 'debt') matchesStatus = hasDebt;
+        if (statusFilter === 'paid') matchesStatus = !hasDebt;
+
+        let matchesFrequency = true;
+        if (frequencyFilter !== 'all') {
+          matchesFrequency = (frequency === frequencyFilter);
+        }
+
+        if (matchesSearch && matchesStatus && matchesFrequency) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      const noResultsRow = document.getElementById('no-results-row');
+      if (visibleCount === 0) {
+        noResultsRow.style.display = '';
+      } else {
+        noResultsRow.style.display = 'none';
+      }
+    }
+  </script>
+{% endblock %}

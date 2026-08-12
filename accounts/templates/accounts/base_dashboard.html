@@ -5,28 +5,198 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101010">
-  <title>{% block title %}Shiftly{% endblock %}</title>
-  {# Jost remains the common, readable interface typeface across the private product area. #}
+  <title>{% block title %}easyCRM{% endblock %}</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'accounts/css/dashboard.css' %}">
   {% block extra_css %}{% endblock %}
+
+  <style>
+    .notif-item:hover {
+      background: rgba(255, 255, 255, 0.06) !important;
+    }
+
+    /* Стильная круглая аватарка пользователя с индикатором */
+    .avatar-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .user-avatar-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #facc15;
+      color: #000;
+      font-weight: 700;
+      font-size: 1.1rem;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      outline: none;
+    }
+
+    .user-avatar-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 12px rgba(250, 204, 21, 0.35);
+    }
+
+    /* Красная точка непрочитанных уведомлений поверх аватарки */
+    .avatar-notif-dot {
+      position: absolute;
+      top: 1px;
+      right: 1px;
+      width: 11px;
+      height: 11px;
+      background-color: #ef4444;
+      border: 2px solid #101010;
+      border-radius: 50%;
+      display: none;
+    }
+  </style>
 </head>
 <body>
   <div class="dashboard-shell">
     <aside class="sidebar" aria-label="Основная навигация">
-      <a class="brand" href="{% url 'dashboard' %}" aria-label="Shiftly: главная панель"><span class="brand-mark">S</span><span>shiftly</span></a>
+      <a class="brand" href="{% if request.user.employee_profile %}{% url 'employee-dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" aria-label="easyCRM: главная панель">
+        <span class="brand-mark">e</span><span>easyCRM</span>
+      </a>
+      
       <nav class="navigation">
-        <a class="nav-item {% if active_page == 'dashboard' %}is-active{% endif %}" href="{% url 'dashboard' %}"><span class="nav-icon">▦</span>Обзор</a>
-        <span class="nav-item is-disabled"><span class="nav-icon">◫</span>График <small>скоро</small></span>
-        <a class="nav-item {% if active_page == 'employees' %}is-active{% endif %}" href="{% url 'employees' %}"><span class="nav-icon">♙</span>Сотрудники</a>
-        <span class="nav-item is-disabled"><span class="nav-icon">⌁</span>Отчёты <small>скоро</small></span>
+        <a class="nav-item {% if active_page == 'dashboard' %}is-active{% endif %}" href="{% if request.user.employee_profile %}{% url 'employee-dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}">
+          <span class="nav-icon">▦</span>Обзор
+        </a>
+        <a class="nav-item {% if active_page == 'schedule' %}is-active{% endif %}" href="{% url 'shift-schedule' %}">
+          <span class="nav-icon">◫</span>График
+        </a>
+        <a class="nav-item {% if active_page == 'payroll' %}is-active{% endif %}" href="{% url 'payroll' %}">
+          <span class="nav-icon">⬡</span>Зарплата
+        </a>
+        
+        {% if not request.user.employee_profile %}
+          <a class="nav-item {% if active_page == 'employees' %}is-active{% endif %}" href="{% url 'employees' %}">
+            <span class="nav-icon">♙</span>Сотрудники
+          </a>
+          <a class="nav-item {% if active_page == 'reports' %}is-active{% endif %}" href="{% url 'shift-reports' %}">
+            <span class="nav-icon">⌁</span>Отчёты
+          </a>
+        {% endif %}
       </nav>
-      <div class="sidebar-footer"><span class="organization-badge">{{ organization.name|slice:":1"|upper }}</span><span class="organization-name">{{ organization.name }}</span></div>
+
+      <div class="sidebar-footer">
+        <span class="organization-badge">{{ organization.name|default:"E"|slice:":1"|upper }}</span>
+        <span class="organization-name">{{ organization.name|default:"easyCRM" }}</span>
+      </div>
     </aside>
-    <main class="content">{% block content %}{% endblock %}</main>
+
+    <main class="content">
+      <!-- Верхний правый угол: Единственная Аватарка с Уведомлениями -->
+      <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 1.5rem;">
+        <div class="avatar-wrapper">
+          <button type="button" class="user-avatar-btn" id="avatar-btn" onclick="toggleNotificationsMenu()" title="Уведомления">
+            {% if request.user.employee_profile %}
+              {{ request.user.employee_profile.first_name|default:request.user.username|slice:":1"|upper }}
+            {% else %}
+              {{ request.user.first_name|default:request.user.username|slice:":1"|upper }}
+            {% endif %}
+            <span class="avatar-notif-dot" id="avatar-dot"></span>
+          </button>
+
+          <!-- Выпадающий список уведомлений -->
+          <div id="notif-dropdown" style="display: none; position: absolute; right: 0; top: calc(100% + 10px); width: 340px; background: #18181b; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; box-shadow: 0 12px 28px rgba(0,0,0,0.6); z-index: 1000; overflow: hidden;">
+            <div style="padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: #121212;">
+              <strong style="color: #fff; font-size: 0.95rem;">Уведомления</strong>
+              <span onclick="markAllRead()" style="color: #22c55e; font-size: 0.8rem; cursor: pointer; text-decoration: underline; font-weight: 500;">Прочитано</span>
+            </div>
+
+            <div id="notif-list" style="max-height: 340px; overflow-y: auto;">
+              <div style="padding: 1.5rem; text-align: center; color: #a1a1aa; font-size: 0.85rem;">Загрузка...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% block content %}{% endblock %}
+    </main>
   </div>
+
+  <script>
+    function fetchNotifications() {
+      fetch('/shifts/api/notifications/')
+        .then(res => res.json())
+        .then(data => {
+          const dot = document.getElementById('avatar-dot');
+          if (dot) {
+            dot.style.display = data.unread_count > 0 ? 'block' : 'none';
+          }
+
+          const list = document.getElementById('notif-list');
+          if (!list) return;
+
+          if (!data.notifications || data.notifications.length === 0) {
+            list.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: #a1a1aa; font-size: 0.85rem;">Нет новых уведомлений</div>';
+            return;
+          }
+
+          let html = '';
+          data.notifications.forEach(n => {
+            const bg = n.is_read ? 'transparent' : 'rgba(34, 197, 94, 0.06)';
+            html += `
+              <a href="${n.link}" class="notif-item" style="display: block; padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.04); text-decoration: none; background: ${bg}; transition: background 0.15s ease;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                  <strong style="color: #fff; font-size: 0.85rem;">${n.title}</strong>
+                  <span style="color: #a1a1aa; font-size: 0.75rem;">${n.created_at}</span>
+                </div>
+                <p style="margin: 0; color: #a1a1aa; font-size: 0.81rem; line-height: 1.35;">${n.message}</p>
+              </a>
+            `;
+          });
+          list.innerHTML = html;
+        })
+        .catch(() => {
+          const list = document.getElementById('notif-list');
+          if (list) list.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: #ef4444; font-size: 0.85rem;">Ошибка загрузки</div>';
+        });
+    }
+
+    function toggleNotificationsMenu() {
+      const dropdown = document.getElementById('notif-dropdown');
+      if (!dropdown) return;
+      const isVisible = dropdown.style.display === 'block';
+      dropdown.style.display = isVisible ? 'none' : 'block';
+      if (!isVisible) {
+        fetchNotifications();
+      }
+    }
+
+    function markAllRead() {
+      fetch('/shifts/api/notifications/read/')
+        .then(() => {
+          const dot = document.getElementById('avatar-dot');
+          if (dot) dot.style.display = 'none';
+          fetchNotifications();
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchNotifications();
+      setInterval(fetchNotifications, 30000);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.avatar-wrapper')) {
+        const dropdown = document.getElementById('notif-dropdown');
+        if (dropdown) dropdown.style.display = 'none';
+      }
+    });
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

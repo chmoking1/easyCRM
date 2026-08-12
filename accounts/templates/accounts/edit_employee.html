@@ -1,0 +1,87 @@
+{% extends "accounts/base_dashboard.html" %}
+
+{% block title %}Настройка сотрудника — Shiftly{% endblock %}
+
+{% block content %}
+  <header class="topbar" style="margin-bottom: 2rem;">
+    <div>
+      <p class="eyebrow">Управление персоналом</p>
+      <h1>Настройка оплаты: {{ employee.full_name }}</h1>
+    </div>
+  </header>
+
+  <div style="background: #18181b; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 2rem; max-width: 600px;">
+    <form method="post" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      {% csrf_token %}
+
+      <div>
+        <label style="display: block; font-size: 0.9rem; color: #a1a1aa; margin-bottom: 0.4rem;">Должность</label>
+        {{ form.position }}
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 0.9rem; color: #a1a1aa; margin-bottom: 0.4rem;">График выплат</label>
+        {{ form.payout_frequency }}
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 0.9rem; color: #a1a1aa; margin-bottom: 0.4rem;">Тип оплаты</label>
+        {{ form.pay_type }}
+      </div>
+
+      <div id="hourly-rate-block">
+        <label style="display: block; font-size: 0.9rem; color: #a1a1aa; margin-bottom: 0.4rem;">Часовая ставка (₽/час)</label>
+        {{ form.hourly_rate }}
+      </div>
+
+      <div id="percentage-block">
+        <label style="display: block; font-size: 0.9rem; color: #a1a1aa; margin-bottom: 0.4rem;">Процент от продаж за смену (%)</label>
+        {{ form.sales_percentage }}
+      </div>
+
+      <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+        <a href="{% url 'payroll' %}" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 0.75rem 1.25rem; border-radius: 8px; text-decoration: none; font-size: 0.95rem;">Отмена</a>
+        <button type="submit" style="background: #22c55e; color: #000; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem;">Сохранить настройки</button>
+      </div>
+    </form>
+  </div>
+
+  <style>
+    .form-input, .form-select {
+      width: 100%;
+      background: #09090b;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+    }
+  </style>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const payTypeSelect = document.getElementById('id_pay_type');
+      const hourlyBlock = document.getElementById('hourly-rate-block');
+      const percentBlock = document.getElementById('percentage-block');
+
+      function toggleRateFields() {
+        const val = payTypeSelect.value;
+        if (val === 'hourly') {
+          hourlyBlock.style.display = 'block';
+          percentBlock.style.display = 'none';
+        } else if (val === 'percent') {
+          hourlyBlock.style.display = 'none';
+          percentBlock.style.display = 'block';
+        } else {
+          // Hybrid (Ставка + %)
+          hourlyBlock.style.display = 'block';
+          percentBlock.style.display = 'block';
+        }
+      }
+
+      payTypeSelect.addEventListener('change', toggleRateFields);
+      toggleRateFields(); // Запуск при загрузке
+    });
+  </script>
+{% endblock %}

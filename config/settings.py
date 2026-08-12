@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "accounts",
+    "shifts",
 ]
 
 # Middleware processes each request in order: security, sessions, auth, then templates/messages.
@@ -43,10 +44,10 @@ MIDDLEWARE = [
 # This module maps browser paths to views.
 ROOT_URLCONF = "config.urls"
 
-# Django templates load from each app's templates folder, so DIRS remains empty.
+# Django templates load from global templates directory and each app's templates folder.
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
-    "DIRS": [],
+    "DIRS": [BASE_DIR / "templates"],
     "APP_DIRS": True,
     "OPTIONS": {"context_processors": [
         "django.template.context_processors.request",

@@ -1,4 +1,4 @@
-"""Forms for secure login and organisation registration."""
+"""Forms for secure login, organisation registration, and employee settings."""
 
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
@@ -6,31 +6,41 @@ from django.contrib.auth.models import User
 
 from .models import Employee
 
+
 class SignInForm(AuthenticationForm):
     """Login form that adds CSS classes without changing Django authentication rules."""
 
-    username = forms.CharField(label="Логин", widget=forms.TextInput(attrs={"placeholder": "Электронная почта или логин", "autocomplete": "username"}))
-    password = forms.CharField(label="Пароль", widget=forms.PasswordInput(attrs={"placeholder": "Пароль", "autocomplete": "current-password"}))
+    username = forms.CharField(
+        label="Логин",
+        widget=forms.TextInput(attrs={"placeholder": "Электронная почта или логин", "autocomplete": "username"}),
+    )
+    password = forms.CharField(
+        label="Пароль",
+        widget=forms.PasswordInput(attrs={"placeholder": "Пароль", "autocomplete": "current-password"}),
+    )
 
 
 class OrganizationRegistrationForm(UserCreationForm):
     """Create the employer account and collect the name of its first organisation."""
 
-    organization_name = forms.CharField(max_length=150, label="Название организации", widget=forms.TextInput(attrs={"placeholder": "Например, Кофейня на Пушкина"}))
-    email = forms.EmailField(label="Электронная почта", widget=forms.EmailInput(attrs={"placeholder": "name@example.com", "autocomplete": "email"}))
+    organization_name = forms.CharField(
+        max_length=150,
+        label="Название организации",
+        widget=forms.TextInput(attrs={"placeholder": "Например, Кофейня на Пушкина"}),
+    )
+    email = forms.EmailField(
+        label="Электронная почта",
+        widget=forms.EmailInput(attrs={"placeholder": "name@example.com", "autocomplete": "email"}),
+    )
 
     class Meta(UserCreationForm.Meta):
-        # Django's default user is sufficient for the first release and keeps auth reliable.
         model = User
         fields = ("organization_name", "username", "email", "password1", "password2")
-        # Labels are explicitly Russian so the form needs no translation configuration.
         labels = {"username": "Логин", "password1": "Пароль", "password2": "Повторите пароль"}
         widgets = {"username": forms.TextInput(attrs={"placeholder": "Придумайте логин", "autocomplete": "username"})}
 
     def __init__(self, *args, **kwargs) -> None:
-        """Replace Django's technical password hints with concise product-language help."""
         super().__init__(*args, **kwargs)
-        # Password inputs need Russian labels and placeholders because they are inherited from Django.
         self.fields["password1"].label = "Пароль"
         self.fields["password1"].widget.attrs.update({"placeholder": "Не менее 8 символов", "autocomplete": "new-password"})
         self.fields["password1"].help_text = "Используйте не менее 8 символов."
@@ -40,13 +50,31 @@ class OrganizationRegistrationForm(UserCreationForm):
 
 
 class EmployeeForm(forms.ModelForm):
-    """Validate the employee details collected by the employer."""
+    """Validate and manage employee details collected by the employer."""
+
+    password = forms.CharField(
+        label="Пароль для входа",
+        required=False,
+        widget=forms.PasswordInput(attrs={"placeholder": "Оставьте пустым для автогенерации", "autocomplete": "new-password"}),
+        help_text="Пароль, по которому сотрудник сможет войти в систему.",
+    )
 
     class Meta:
-        """Keep all field labels and input hints next to the data definition."""
-
         model = Employee
-        fields = ("first_name", "last_name", "phone", "email", "telegram_username", "position", "hourly_rate", "sales_percentage")
+        fields = (
+            "first_name",
+            "last_name",
+            "phone",
+            "email",
+            "telegram_username",
+            "position",
+            "pay_type",
+            "hourly_rate",
+            "sales_percentage",
+            "payout_frequency",
+            "payout_days",
+            "can_edit_schedule",
+        )
         labels = {
             "first_name": "Имя",
             "last_name": "Фамилия",
@@ -54,8 +82,12 @@ class EmployeeForm(forms.ModelForm):
             "email": "Электронная почта",
             "telegram_username": "Telegram",
             "position": "Должность",
+            "pay_type": "Тип оплаты",
             "hourly_rate": "Ставка в час, ₽",
             "sales_percentage": "Процент от продаж, %",
+            "payout_frequency": "График выплат",
+            "payout_days": "Дни выплат",
+            "can_edit_schedule": "Разрешено предлагать график",
         }
         widgets = {
             "first_name": forms.TextInput(attrs={"placeholder": "Анна", "autocomplete": "given-name"}),
@@ -64,10 +96,17 @@ class EmployeeForm(forms.ModelForm):
             "email": forms.EmailInput(attrs={"placeholder": "anna@example.com", "autocomplete": "email"}),
             "telegram_username": forms.TextInput(attrs={"placeholder": "@anna_ivanova", "autocomplete": "off"}),
             "position": forms.TextInput(attrs={"placeholder": "Бариста"}),
+            "pay_type": forms.Select(attrs={"id": "id_pay_type"}),
             "hourly_rate": forms.NumberInput(attrs={"placeholder": "350", "min": "0", "step": "0.01"}),
             "sales_percentage": forms.NumberInput(attrs={"placeholder": "5", "min": "0", "step": "0.01"}),
+            "payout_frequency": forms.Select(attrs={"id": "id_payout_frequency"}),
+            "payout_days": forms.HiddenInput(attrs={"id": "id_payout_days"}),
+            "can_edit_schedule": forms.CheckboxInput(attrs={"style": "width: 18px; height: 18px; accent-color: #22c55e;"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["payout_days"].required = False
+
     def clean_telegram_username(self) -> str:
-        """Store a Telegram username consistently, whether the employer types @ or not."""
         return self.cleaned_data["telegram_username"].strip().removeprefix("@")

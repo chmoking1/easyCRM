@@ -1,0 +1,63 @@
+{% extends "accounts/base_dashboard.html" %}
+{% load static %}
+
+{% block title %}Мои выплаты — Shiftly{% endblock %}
+
+{% block content %}
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Финансы</p>
+      <h1>Мои выплаты и заработок</h1>
+    </div>
+  </header>
+
+  <!-- Карточки с балансом -->
+  <section class="today-section" style="margin-bottom: 2rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+      <div style="background: rgba(250, 204, 21, 0.05); border: 1px solid rgba(250, 204, 21, 0.25); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-bottom: 0.35rem;">Заработано (к ближайшей выплате)</span>
+        <strong style="font-size: 1.8rem; color: #facc15; display: block; line-height: 1.2;">{{ unpaid_amount }} ₽</strong>
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.5rem;">За нерасчитанные смены: <strong>{{ unpaid_shifts_count }}</strong></span>
+      </div>
+
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-bottom: 0.35rem;">График выплат</span>
+        <strong style="font-size: 1.2rem; color: #fff; display: block; line-height: 1.2;">{{ employee.get_payout_days_display }}</strong>
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.5rem;">Установлено управляющим</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- История полученных выплат -->
+  <section class="today-section">
+    <div class="section-heading" style="margin-bottom: 1rem;">
+      <h3 style="font-size: 1.1rem; margin: 0; color: #fff;">История полученных выплат</h3>
+    </div>
+
+    {% if payments %}
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {% for payment in payments %}
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 0.85rem 1.25rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+            <div>
+              <strong style="color: #fff; font-size: 0.95rem; display: block;">Выплата {{ payment.paid_at|date:"d.m.Y в H:i" }}</strong>
+              {% if payment.comment %}
+                <span style="color: #a1a1aa; font-size: 0.8rem;">{{ payment.comment }}</span>
+              {% endif %}
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 1.25rem;">
+              <strong style="color: #22c55e; font-size: 1.1rem;">+{{ payment.amount }} ₽</strong>
+              <a href="{% url 'download-payment-receipt' payment.id %}" target="_blank" style="color: #facc15; font-size: 0.85rem; text-decoration: underline; font-weight: 500;">
+                Чек (PDF)
+              </a>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); padding: 1.5rem; text-align: center; border-radius: 8px; color: #a1a1aa; font-size: 0.9rem;">
+        История выплат пока пуста.
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

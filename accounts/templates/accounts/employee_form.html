@@ -1,30 +1,301 @@
 {% extends "accounts/base_dashboard.html" %}
 {% load static %}
 
-{% block title %}{% if is_edit %}Редактирование сотрудника{% else %}Новый сотрудник{% endif %} — Shiftly{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'accounts/css/employees.css' %}">{% endblock %}
+{% block title %}{% if is_edit %}Редактировать{% else %}Добавить{% endif %} сотрудника — Shiftly{% endblock %}
 
 {% block content %}
-  <header class="form-topbar"><a class="back-link" href="{% if is_edit %}{% url 'employee-detail' employee.id %}{% else %}{% url 'employees' %}{% endif %}">← {% if is_edit %}Карточка сотрудника{% else %}Все сотрудники{% endif %}</a><p class="eyebrow">{{ organization.name }}</p><h1>{% if is_edit %}Редактирование сотрудника{% else %}Новый сотрудник{% endif %}</h1><p class="page-description">Укажите контактные данные и правила расчёта заработка.</p></header>
-  <form class="employee-form" method="post" novalidate>
-    {% csrf_token %}
-    {# These equal columns use the wide form area efficiently while grouping related details. #}
-    <div class="form-top-grid">
-      <section class="form-section"><h2>Основная информация</h2><div class="form-grid">
-        {# Explicit fields make this business form easy to adjust without relying on Python field order. #}
-        {% for field in form %}
-          {% if field.name == "first_name" or field.name == "last_name" or field.name == "position" %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endif %}
-        {% endfor %}
-      </div></section>
-      <section class="form-section"><div class="contact-heading"><div><h2>Контакты</h2><p>Телефон обязателен. Email и Telegram — по желанию.</p></div></div><div class="form-grid">
-        {% for field in form %}
-          {% if field.name == "phone" or field.name == "email" or field.name == "telegram_username" %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endif %}
-        {% endfor %}
-      </div></section>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow"><a href="{% url 'employees' %}" style="color: #a1a1aa; text-decoration: none;">← Все сотрудники</a></p>
+      <h1>{% if is_edit %}Редактировать сотрудника{% else %}Создание сотрудника{% endif %}</h1>
     </div>
-    <section class="form-section"><h2>Условия оплаты</h2><p>Процент от продаж можно оставить равным нулю.</p><div class="form-grid payment-grid">
-      {% for field in form %}{% if field.name == "hourly_rate" or field.name == "sales_percentage" %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}</div>{% endif %}{% endfor %}
-    </div></section>
-    <div class="form-actions"><a class="secondary-button" href="{% if is_edit %}{% url 'employee-detail' employee.id %}{% else %}{% url 'employees' %}{% endif %}">Отмена</a><button class="add-employee-button" type="submit">{% if is_edit %}Сохранить изменения{% else %}Добавить сотрудника <span aria-hidden="true">+</span>{% endif %}</button></div>
-  </form>
+  </header>
+
+  {% if messages %}
+    <div style="margin-bottom: 1.5rem;">
+      {% for message in messages %}
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 0.85rem 1.25rem; border-radius: 8px; font-size: 0.9rem; margin-bottom: 0.5rem;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div style="background: #18181b; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 2rem; max-width: 680px; margin-top: 1.5rem;">
+    <form method="post" id="employee-form" style="display: flex; flex-direction: column; gap: 1.25rem;">
+      {% csrf_token %}
+
+      <!-- Скрытое поле Django для сохранения данных payout_days -->
+      {{ form.payout_days }}
+
+      <!-- ФИО -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Имя *</label>
+          {{ form.first_name }}
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Фамилия *</label>
+          {{ form.last_name }}
+        </div>
+      </div>
+
+      <!-- Должность и Телефон -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Должность</label>
+          {{ form.position }}
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Телефон</label>
+          {{ form.phone }}
+        </div>
+      </div>
+
+      <!-- Email и Telegram -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Email</label>
+          {{ form.email }}
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Telegram</label>
+          {{ form.telegram_username }}
+        </div>
+      </div>
+
+      <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 0.5rem 0;">
+
+      <!-- Условия оплаты и График выплат -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Тип оплаты</label>
+          {{ form.pay_type }}
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">График выплат</label>
+          {{ form.payout_frequency }}
+        </div>
+      </div>
+
+      <!-- Почасовая ставка и Процент -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+        <div id="hourly-rate-group">
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Почасовая ставка (₽)</label>
+          {{ form.hourly_rate }}
+        </div>
+        <div id="percentage-group">
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Процент от продаж (%)</label>
+          {{ form.sales_percentage }}
+        </div>
+      </div>
+
+      <!-- ДИНАМИЧЕСКИЙ БЛОК НАСТРОЙКИ ДНЕЙ ВЫПЛАТЫ -->
+      <div id="payout-days-container" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem; border-radius: 8px;">
+        <!-- Вариант 1: Раз в неделю -->
+        <div id="group-weekly" class="payout-day-subgroup">
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">День недели для выплаты</label>
+          <select id="select-weekday">
+            <option value="1">Понедельник</option>
+            <option value="2">Вторник</option>
+            <option value="3">Среда</option>
+            <option value="4">Четверг</option>
+            <option value="5">Пятница</option>
+            <option value="6">Суббота</option>
+            <option value="7">Воскресенье</option>
+          </select>
+        </div>
+
+        <!-- Вариант 2: 2 раза в месяц (Аванс + Зарплата) -->
+        <div id="group-biweekly" class="payout-day-subgroup" style="display: none;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div>
+              <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Число месяца (Аванс)</label>
+              <select id="select-advance-day"></select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Число месяца (Основная выплата)</label>
+              <select id="select-salary-day"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Вариант 3: По запросу / Согласованный день -->
+        <div id="group-custom" class="payout-day-subgroup" style="display: none;">
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Согласованный день месяца для выплаты</label>
+          <select id="select-custom-day"></select>
+        </div>
+
+        <!-- Вариант 4: Каждый день -->
+        <div id="group-daily" class="payout-day-subgroup" style="display: none;">
+          <span style="color: #a1a1aa; font-size: 0.85rem;">Выплата рассчитывается и выдается ежедневно по завершении смены.</span>
+        </div>
+      </div>
+
+      {% if not is_edit %}
+        <div>
+          <label style="display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 0.35rem;">Пароль для входа</label>
+          {{ form.password }}
+          <span style="display: block; font-size: 0.75rem; color: #a1a1aa; margin-top: 0.25rem;">Оставьте пустым для автогенерации</span>
+        </div>
+      {% endif %}
+
+      <!-- Флаг смен в графике -->
+      <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); padding: 1rem; border-radius: 8px; display: flex; align-items: flex-start; gap: 0.75rem; margin-top: 0.5rem;">
+        {{ form.can_edit_schedule }}
+        <div>
+          <label for="id_can_edit_schedule" style="font-size: 0.9rem; color: #fff; font-weight: 500; cursor: pointer; display: block;">
+            Разрешить сотруднику предлагать смены в графике
+          </label>
+          <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.2rem;">
+            Если включено, сотрудник сможет создавать заявки на смены в календаре, ожидая вашего утверждения.
+          </span>
+        </div>
+      </div>
+
+      <!-- Кнопки -->
+      <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+        <button type="submit" style="background: #facc15; border: none; color: #000; font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 0.95rem;">
+          {% if is_edit %}Сохранить изменения{% else %}Создать сотрудника{% endif %}
+        </button>
+        <a href="{% if is_edit %}{% url 'employee-detail' employee.id %}{% else %}{% url 'employees' %}{% endif %}" style="background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 0.75rem 1.25rem; border-radius: 8px; text-decoration: none; font-size: 0.95rem; display: inline-flex; align-items: center;">
+          Отмена
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <style>
+    .form-input, input[type="text"], input[type="email"], input[type="number"], input[type="password"], select {
+      width: 100%;
+      background: #09090b !important;
+      border: 1px solid rgba(255,255,255,0.15) !important;
+      color: #fff !important;
+      padding: 0.75rem 1rem !important;
+      border-radius: 8px !important;
+      font-size: 0.95rem !important;
+      outline: none !important;
+      box-sizing: border-box;
+    }
+    select option {
+      background: #18181b;
+      color: #fff;
+    }
+  </style>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const advanceSelect = document.getElementById('select-advance-day');
+      const salarySelect = document.getElementById('select-salary-day');
+      const customSelect = document.getElementById('select-custom-day');
+
+      // Генерируем дни месяца от 1 до 31
+      for (let i = 1; i <= 31; i++) {
+        advanceSelect.add(new Option(`${i} число месяца`, i));
+        salarySelect.add(new Option(`${i} число месяца`, i));
+        customSelect.add(new Option(`${i} число месяца`, i));
+      }
+
+      const payTypeSelect = document.getElementById('id_pay_type');
+      const hourlyGroup = document.getElementById('hourly-rate-group');
+      const percentGroup = document.getElementById('percentage-group');
+
+      const freqSelect = document.getElementById('id_payout_frequency');
+      const hiddenDaysInput = document.getElementById('id_payout_days');
+
+      const groupWeekly = document.getElementById('group-weekly');
+      const groupBiweekly = document.getElementById('group-biweekly');
+      const groupCustom = document.getElementById('group-custom');
+      const groupDaily = document.getElementById('group-daily');
+
+      const weekdaySelect = document.getElementById('select-weekday');
+
+      // Переключение ставки и процента
+      function togglePayTypeFields() {
+        if (!payTypeSelect) return;
+        const val = payTypeSelect.value;
+        if (val === 'hourly') {
+          hourlyGroup.style.display = 'block';
+          percentGroup.style.display = 'none';
+        } else if (val === 'percent') {
+          hourlyGroup.style.display = 'none';
+          percentGroup.style.display = 'block';
+        } else {
+          hourlyGroup.style.display = 'block';
+          percentGroup.style.display = 'block';
+        }
+      }
+
+      // Загрузка существующих значений из скрытого поля payout_days
+      function parseInitialPayoutDays() {
+        const val = hiddenDaysInput.value || '';
+        const freq = freqSelect.value;
+
+        if (freq === 'weekly') {
+          weekdaySelect.value = val || '1';
+        } else if (freq === 'biweekly') {
+          const parts = val.split(',');
+          advanceSelect.value = parts[0] || '15';
+          salarySelect.value = parts[1] || '30';
+        } else if (freq === 'custom') {
+          customSelect.value = val || '1';
+        }
+      }
+
+      // Синхронизация текущего выбора со скрытым инпутом Django
+      function updateHiddenPayoutDays() {
+        const freq = freqSelect.value;
+        if (freq === 'weekly') {
+          hiddenDaysInput.value = weekdaySelect.value;
+        } else if (freq === 'biweekly') {
+          hiddenDaysInput.value = `${advanceSelect.value},${salarySelect.value}`;
+        } else if (freq === 'custom') {
+          hiddenDaysInput.value = customSelect.value;
+        } else if (freq === 'daily') {
+          hiddenDaysInput.value = 'all';
+        }
+      }
+
+      // Переключение визуальных блоков
+      function toggleFrequencyFields() {
+        const freq = freqSelect.value;
+
+        groupWeekly.style.display = 'none';
+        groupBiweekly.style.display = 'none';
+        groupCustom.style.display = 'none';
+        groupDaily.style.display = 'none';
+
+        if (freq === 'weekly') {
+          groupWeekly.style.display = 'block';
+        } else if (freq === 'biweekly') {
+          groupBiweekly.style.display = 'block';
+        } else if (freq === 'custom') {
+          groupCustom.style.display = 'block';
+        } else if (freq === 'daily') {
+          groupDaily.style.display = 'block';
+        }
+
+        updateHiddenPayoutDays();
+      }
+
+      if (payTypeSelect) {
+        payTypeSelect.addEventListener('change', togglePayTypeFields);
+        togglePayTypeFields();
+      }
+
+      if (freqSelect) {
+        freqSelect.addEventListener('change', toggleFrequencyFields);
+        parseInitialPayoutDays();
+        toggleFrequencyFields();
+      }
+
+      [weekdaySelect, advanceSelect, salarySelect, customSelect].forEach(el => {
+        el.addEventListener('change', updateHiddenPayoutDays);
+      });
+
+      document.getElementById('employee-form').addEventListener('submit', function() {
+        updateHiddenPayoutDays();
+      });
+    });
+  </script>
 {% endblock %}

@@ -1,61 +1,158 @@
-"""Database models needed to create the first employer organisation."""
-
-from django.conf import settings
+from decimal import Decimal
+from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 
 class Organization(models.Model):
-    """A business that will later own employees, schedules, and payroll data."""
-
-    # A short business name is enough for the first registration flow.
-    name = models.CharField("Название организации", max_length=150)
-    # The owner is created by the registration form and controls the organisation initially.
-    owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="owned_organization")
-    # Creation time supports audit history without exposing it in the UI yet.
-    created_at = models.DateTimeField("Создана", auto_now_add=True)
+    name = models.CharField("Название организации", max_length=255)
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="owned_organizations",
+        verbose_name="Владелец",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # Russian labels make Django admin understandable to the product owner.
         verbose_name = "Организация"
         verbose_name_plural = "Организации"
+        ordering = ["-created_at"]
 
-    def __str__(self) -> str:
-        """Show the business name in Django admin and debug output."""
+    def __str__(self):
         return self.name
 
 
 class Employee(models.Model):
-    """A team member belonging to one organisation, independent from a future login account."""
+    class PayoutFrequency(models.TextChoices):
+        WEEKLY = "weekly", "Раз в неделю"
+        BIWEEKLY = "biweekly", "2 раза в месяц"
+        DAILY = "daily", "Каждый день"
+        CUSTOM = "custom", "По запросу"
 
-    # Deleting an organisation removes its private employee data with it.
-    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="employees")
-    first_name = models.CharField("Имя", max_length=80)
-    last_name = models.CharField("Фамилия", max_length=80, blank=True)
-    phone = models.CharField("Телефон", max_length=30)
-    # Optional digital contacts let an employer reach staff without requiring a CRM login yet.
-    email = models.EmailField("Электронная почта", blank=True)
-    telegram_username = models.CharField("Telegram", max_length=64, blank=True)
-    position = models.CharField("Должность", max_length=100)
-    # DecimalField avoids floating-point rounding mistakes in payroll calculations.
-    hourly_rate = models.DecimalField("Ставка в час", max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
-    sales_percentage = models.DecimalField("Процент от продаж", max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0)])
-    # Deactivation preserves payroll history while excluding a former employee from future schedules.
-    is_active = models.BooleanField("Работает", default=True)
-    created_at = models.DateTimeField("Добавлен", auto_now_add=True)
+    class PayType(models.TextChoices):
+        HOURLY = "hourly", "Почасовая ставка"
+        PERCENTAGE = "percent", "Процент от продаж"
+        HYBRID = "hybrid", "Ставка + Процент"
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="employees",
+        verbose_name="Организация",
+    )
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="employee_profile",
+        verbose_name="Учётная запись",
+        null=True,
+        blank=True,
+    )
+    first_name = models.CharField("Имя", max_length=150)
+    last_name = models.CharField("Фамилия", max_length=150)
+    phone = models.CharField("Телефон", max_length=30, blank=True)
+    email = models.EmailField("Email", blank=True)
+    telegram_username = models.CharField("Telegram", max_length=100, blank=True)
+    position = models.CharField("Должность", max_length=100, blank=True)
+
+    # --- Настройки формата и расчёта оплаты ---
+    pay_type = models.CharField(
+        "Тип оплаты",
+        max_length=20,
+        choices=PayType.choices,
+        default=PayType.HOURLY,
+    )
+    hourly_rate = models.DecimalField(
+        "Почасовая ставка (₽)",
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    sales_percentage = models.DecimalField(
+        "Процент от продаж (%)",
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+
+    # --- Настройки графика выплат ---
+    payout_frequency = models.CharField(
+        "График выплат",
+        max_length=20,
+        choices=PayoutFrequency.choices,
+        default=PayoutFrequency.WEEKLY,
+    )
+    payout_days = models.CharField(
+        "Дни выплат",
+        max_length=50,
+        default="1",
+        blank=True,
+        help_text="Для 'weekly': 1 (Пн) - 7 (Вс). Для 'biweekly': числа месяца через запятую (например, 15,30).",
+    )
+    is_active = models.BooleanField("Активен", default=True)
+    can_edit_schedule = models.BooleanField(
+        "Разрешено предлагать график",
+        default=False,
+        help_text="Разрешает сотруднику создавать заявки на смены в календаре.",
+    )
 
     class Meta:
-        """Default ordering puts recently added team members at the top."""
-
-        ordering = ("-is_active", "-created_at")
         verbose_name = "Сотрудник"
         verbose_name_plural = "Сотрудники"
+        ordering = ["first_name", "last_name"]
+
+    def __str__(self):
+        return f"{self.full_name} ({self.organization.name})"
 
     @property
-    def full_name(self) -> str:
-        """Return a display-ready name without leaving extra whitespace for a missing surname."""
+    def full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
 
-    def __str__(self) -> str:
-        """Use the full name in Django admin and developer output."""
-        return self.full_name
+    def get_payout_days_display(self):
+        """Красивое представление выбранных дней выплаты."""
+        if self.payout_frequency == self.PayoutFrequency.WEEKLY:
+            weekdays = {
+                "1": "Понедельник",
+                "2": "Вторник",
+                "3": "Среда",
+                "4": "Четверг",
+                "5": "Пятница",
+                "6": "Суббота",
+                "7": "Воскресенье",
+            }
+            day_name = weekdays.get(str(self.payout_days), "Понедельник")
+            return f"Каждую неделю: {day_name.lower()}"
+        elif self.payout_frequency == self.PayoutFrequency.BIWEEKLY:
+            parts = str(self.payout_days).split(",")
+            if len(parts) == 2:
+                return f"{parts[0]} и {parts[1]} числа месяца"
+            return f"{self.payout_days} числа месяца"
+        elif self.payout_frequency == self.PayoutFrequency.CUSTOM:
+            return f"{self.payout_days} число месяца (по запросу)"
+        elif self.payout_frequency == self.PayoutFrequency.DAILY:
+            return "Ежедневно"
+        return self.get_payout_frequency_display()
+
+    def is_payout_due_today(self) -> bool:
+        """Проверяет, наступил ли сегодня день выплаты по графику сотрудника."""
+        today = timezone.localdate()
+
+        if self.payout_frequency == self.PayoutFrequency.DAILY:
+            return True
+
+        if self.payout_frequency == self.PayoutFrequency.WEEKLY:
+            # 1 = Понедельник, 7 = Воскресенье
+            return str(today.isoweekday()) == str(self.payout_days)
+
+        if self.payout_frequency == self.PayoutFrequency.BIWEEKLY:
+            days = [d.strip() for d in str(self.payout_days).split(",")]
+            return str(today.day) in days
+
+        if self.payout_frequency == self.PayoutFrequency.CUSTOM:
+            return str(today.day) == str(self.payout_days)
+
+        return False

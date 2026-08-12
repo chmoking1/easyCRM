@@ -1,25 +1,128 @@
 {% extends "accounts/base_dashboard.html" %}
 {% load static %}
 
-{% block title %}{{ organization.name }} — Shiftly{% endblock %}
+{% block title %}Дашборд — easyCRM{% endblock %}
 
 {% block content %}
-  <header class="topbar">
-    <div><p class="eyebrow">Панель работодателя</p><h1>Добрый день, {{ request.user.username }}.</h1></div>
-    <button class="profile-button" type="button" aria-label="Профиль пользователя">{{ request.user.username|slice:":1"|upper }}</button>
+  <header class="topbar" style="margin-bottom: 1.5rem;">
+    <div>
+      <p class="eyebrow">Панель работодателя</p>
+      <h1 style="margin: 0;">{{ organization.name }}</h1>
+    </div>
   </header>
-  <section class="today-section" aria-labelledby="today-heading">
-    <div class="section-heading"><div><p class="eyebrow">{% now "l, j E" %}</p><h2 id="today-heading">Смены сегодня</h2></div><span class="live-label"><span></span>Сегодня</span></div>
-    <div class="summary-grid">
-      <article class="summary-card"><p>Запланировано</p><strong>{{ today_summary.planned }}</strong><span>смен</span></article>
-      <article class="summary-card accent-card"><p>Сейчас на смене</p><strong>{{ today_summary.open }}</strong><span>сотрудников</span></article>
-      <article class="summary-card"><p>Завершено</p><strong>{{ today_summary.completed }}</strong><span>смен</span></article>
+
+  <!-- Карточки сводки на сегодня -->
+  <section class="today-section" style="margin-top: 1rem;">
+    <div class="section-heading" style="margin-bottom: 1rem;">
+      <div>
+        <p class="eyebrow" style="text-transform: uppercase; font-size: 0.75rem; color: #a1a1aa; margin: 0;">{{ today|date:"l, d E" }}</p>
+        <h2 style="font-size: 1.3rem; margin: 0.2rem 0 0 0; color: #fff;">Смены сегодня</h2>
+      </div>
+      <span class="live-label" style="font-size: 0.8rem; color: #facc15; display: flex; align-items: center; gap: 0.4rem;">
+        <span style="width: 8px; height: 8px; background: #facc15; border-radius: 50%; display: inline-block;"></span> Сегодня
+      </span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2.5rem;">
+      <!-- Запланировано -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-bottom: 0.5rem;">Запланировано</span>
+        <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+          <strong style="font-size: 2rem; color: #fff; line-height: 1;">{{ today_summary.planned }}</strong>
+          <small style="color: #a1a1aa; font-size: 0.85rem;">смен</small>
+        </div>
+      </div>
+
+      <!-- Сейчас на смене -->
+      <div style="background: rgba(250, 204, 21, 0.04); border: 1px solid rgba(250, 204, 21, 0.2); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-bottom: 0.5rem;">Сейчас на смене</span>
+        <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+          <strong style="font-size: 2rem; color: #facc15; line-height: 1;">{{ today_summary.open }}</strong>
+          <small style="color: #a1a1aa; font-size: 0.85rem;">сотрудников</small>
+        </div>
+      </div>
+
+      <!-- Завершено -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-bottom: 0.5rem;">Завершено</span>
+        <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+          <strong style="font-size: 2rem; color: #fff; line-height: 1;">{{ today_summary.completed }}</strong>
+          <small style="color: #a1a1aa; font-size: 0.85rem;">смен</small>
+        </div>
+      </div>
     </div>
   </section>
-  <section class="empty-state" aria-labelledby="empty-heading">
-    <div class="empty-symbol" aria-hidden="true"><span></span><span></span><span></span></div>
-    <p class="eyebrow">Начало работы</p><h2 id="empty-heading">Соберите свою команду</h2>
-    <p>Добавьте первого сотрудника, настройте его оплату — и сможете составить график первой смены.</p>
-    <a class="add-employee-button" href="{% url 'employee-create' %}">Добавить сотрудника <span aria-hidden="true">+</span></a>
+
+  <!-- Открытые смены в реальном времени -->
+  <section class="today-section" style="margin-bottom: 2.5rem;">
+    <div class="section-heading" style="margin-bottom: 1rem;">
+      <div>
+        <p class="eyebrow" style="text-transform: uppercase; font-size: 0.75rem; color: #a1a1aa; margin: 0;">В реальном времени</p>
+        <h3 style="font-size: 1.1rem; margin: 0.2rem 0 0 0; color: #fff;">Работают прямо сейчас</h3>
+      </div>
+    </div>
+
+    {% if open_shifts %}
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {% for shift in open_shifts %}
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-left: 4px solid #facc15; padding: 1rem 1.25rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <strong style="color: #fff; font-size: 1rem; display: block;">{{ shift.employee.full_name }}</strong>
+              <span style="color: #a1a1aa; font-size: 0.85rem;">
+                Начало: {{ shift.opened_at|date:"H:i" }} (отработано: {{ shift.duration_hours }} ч.)
+              </span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              {% if shift.schedule_compliance == 'late' %}
+                <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">
+                  Опоздание
+                </span>
+              {% elif shift.schedule_compliance == 'unscheduled' %}
+                <span style="background: rgba(161, 161, 170, 0.15); color: #a1a1aa; border: 1px solid rgba(161, 161, 170, 0.3); padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">
+                  Вне графика
+                </span>
+              {% else %}
+                <span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.75rem;">
+                  В срок
+                </span>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); padding: 1.5rem; text-align: center; border-radius: 8px; color: #a1a1aa; font-size: 0.9rem;">
+        Сейчас нет активных открытых смен.
+      </div>
+    {% endif %}
   </section>
+
+  <!-- Последние завершенные смены -->
+  {% if recent_completed %}
+    <section class="today-section">
+      <div class="section-heading" style="margin-bottom: 1rem;">
+        <div>
+          <p class="eyebrow" style="text-transform: uppercase; font-size: 0.75rem; color: #a1a1aa; margin: 0;">Архив смен</p>
+          <h3 style="font-size: 1.1rem; margin: 0.2rem 0 0 0; color: #fff;">Недавно завершённые</h3>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {% for shift in recent_completed %}
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 0.85rem 1.25rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <strong style="color: #fff; font-size: 0.95rem; display: block;">{{ shift.employee.full_name }}</strong>
+              <span style="color: #a1a1aa; font-size: 0.8rem;">
+                {{ shift.opened_at|date:"d.m.Y (H:i)" }} — {{ shift.closed_at|date:"H:i" }} ({{ shift.duration_hours }} ч.)
+              </span>
+            </div>
+            <div style="text-align: right;">
+              <span style="display: block; font-weight: 600; color: #22c55e; font-size: 0.95rem;">+{{ shift.calculated_payout }} ₽</span>
+              <span style="font-size: 0.8rem; color: #a1a1aa;">Выручка: {{ shift.total_sales }} ₽</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
 {% endblock %}

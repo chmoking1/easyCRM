@@ -1,0 +1,219 @@
+{% extends "accounts/base_dashboard.html" %}
+{% load static %}
+
+{% block title %}Аналитика и Отчёты — easyCRM{% endblock %}
+
+{% block extra_css %}
+  <!-- Подключаем легкую библиотеку Chart.js для графиков -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+  <header class="topbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <p class="eyebrow">Аналитика бизнеса</p>
+      <h1 style="margin: 0;">Отчёты и Показатели</h1>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+      <!-- Кнопка скачивания сводного PDF-отчета -->
+      <a href="{% url 'export-analytics-pdf' %}?period={{ period_mode }}" target="_blank" style="background: rgba(250, 204, 21, 0.1); border: 1px solid rgba(250, 204, 21, 0.3); color: #facc15; text-decoration: none; padding: 0.45rem 0.9rem; border-radius: 8px; font-size: 0.88rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem; transition: background 0.15s ease;" onmouseover="this.style.background='rgba(250, 204, 21, 0.2)'" onmouseout="this.style.background='rgba(250, 204, 21, 0.1)'">
+        <span>📄</span> Скачать PDF-отчёт
+      </a>
+
+      <!-- Быстрые переключатели периодов -->
+      <div style="display: flex; gap: 0.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 0.25rem; border-radius: 8px;">
+        <a href="?period=this_month" style="padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500; text-decoration: none; color: {% if period_mode == 'this_month' %}#000{% else %}#a1a1aa{% endif %}; background: {% if period_mode == 'this_month' %}#facc15{% else %}transparent{% endif %};">Текущий месяц</a>
+        <a href="?period=last_month" style="padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500; text-decoration: none; color: {% if period_mode == 'last_month' %}#000{% else %}#a1a1aa{% endif %}; background: {% if period_mode == 'last_month' %}#facc15{% else %}transparent{% endif %};">Прошлый месяц</a>
+        <a href="?period=last_30" style="padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500; text-decoration: none; color: {% if period_mode == 'last_30' %}#000{% else %}#a1a1aa{% endif %}; background: {% if period_mode == 'last_30' %}#facc15{% else %}transparent{% endif %};">За 30 дней</a>
+        <a href="?period=last_7" style="padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.85rem; font-weight: 500; text-decoration: none; color: {% if period_mode == 'last_7' %}#000{% else %}#a1a1aa{% endif %}; background: {% if period_mode == 'last_7' %}#facc15{% else %}transparent{% endif %};">За 7 дней</a>
+      </div>
+    </div>
+  </header>
+
+  <p style="color: #a1a1aa; font-size: 0.9rem; margin-top: -1rem; margin-bottom: 1.5rem;">
+    Период отчёта: <strong style="color: #fff;">{{ start_date|date:"d.m.Y" }} — {{ end_date|date:"d.m.Y" }}</strong>
+  </p>
+
+  <!-- 1. Карточки ключевых бизнес-метрик (KPIs) -->
+  <section style="margin-bottom: 2rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+      
+      <div style="background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.25); padding: 1.25rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-bottom: 0.35rem;">Общая выручка</span>
+        <strong style="font-size: 1.8rem; color: #22c55e; display: block; line-height: 1.2;">{{ total_revenue }} ₽</strong>
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.4rem;">По закрытым сменам</span>
+      </div>
+
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-bottom: 0.35rem;">Фонд оплаты труда (ФОТ)</span>
+        <strong style="font-size: 1.8rem; color: #fff; display: block; line-height: 1.2;">{{ total_fot }} ₽</strong>
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.4rem;">Смены + Премии - Штрафы</span>
+      </div>
+
+      <div style="background: {% if fot_percentage > 30 %}rgba(239, 68, 68, 0.05){% else %}rgba(250, 204, 21, 0.04){% endif %}; border: 1px solid {% if fot_percentage > 30 %}rgba(239, 68, 68, 0.25){% else %}rgba(250, 204, 21, 0.25){% endif %}; padding: 1.25rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-bottom: 0.35rem;">Доля ФОТ от выручки</span>
+        <strong style="font-size: 1.8rem; color: {% if fot_percentage > 30 %}#ef4444{% else %}#facc15{% endif %}; display: block; line-height: 1.2;">{{ fot_percentage }}%</strong>
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.4rem;">
+          {% if fot_percentage > 30 %}⚠️ Высокая нагрузка на ФОТ{% else %}Оптимальная рентабельность{% endif %}
+        </span>
+      </div>
+
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem; border-radius: 12px;">
+        <span style="color: #a1a1aa; font-size: 0.85rem; display: block; margin-bottom: 0.35rem;">Выручка в час</span>
+        <strong style="font-size: 1.8rem; color: #fff; display: block; line-height: 1.2;">{{ revenue_per_hour }} ₽/ч</strong>
+        <span style="color: #a1a1aa; font-size: 0.8rem; display: block; margin-top: 0.4rem;">Всего отработано: {{ total_hours }} ч.</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 2. Графики бизнес-аналитики -->
+  <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
+    <!-- График 1: Динамика выручки и ФОТ по дням -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.25rem;">
+      <h3 style="margin: 0 0 1rem 0; font-size: 1.05rem; color: #fff;">Динамика выручки и ФОТ по дням</h3>
+      <div style="height: 240px; position: relative;">
+        <canvas id="revenueChart"></canvas>
+      </div>
+    </div>
+
+    <!-- График 2: Загрузка по дням недели -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.25rem;">
+      <h3 style="margin: 0 0 1rem 0; font-size: 1.05rem; color: #fff;">Выручка по дням недели</h3>
+      <div style="height: 240px; position: relative;">
+        <canvas id="weekdayChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Сравнительный рейтинг эффективности сотрудников -->
+  <section style="margin-bottom: 2rem;">
+    <div style="margin-bottom: 1rem;">
+      <h2 style="margin: 0; font-size: 1.25rem; color: #fff;">Рейтинг эффективности сотрудников</h2>
+      <p style="margin: 0.25rem 0 0 0; color: #a1a1aa; font-size: 0.85rem;">Сравнение показателей команды за выбранный период.</p>
+    </div>
+
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden;">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: #a1a1aa; font-size: 0.85rem; text-transform: uppercase;">
+            <th style="padding: 1rem 1.25rem;">Сотрудник</th>
+            <th style="padding: 1rem 1.25rem;">Смен / Часов</th>
+            <th style="padding: 1rem 1.25rem;">Выручка заведению</th>
+            <th style="padding: 1rem 1.25rem;">Заработок (ФОТ)</th>
+            <th style="padding: 1rem 1.25rem; text-align: right;">Выручка в час</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for stat in employee_stats %}
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+              <td style="padding: 1rem 1.25rem;">
+                <strong style="color: #fff; display: block; font-size: 0.95rem;">{{ stat.employee.full_name }}</strong>
+                <span style="color: #a1a1aa; font-size: 0.8rem;">{{ stat.employee.position|default:"Сотрудник" }}</span>
+              </td>
+              <td style="padding: 1rem 1.25rem; color: #a1a1aa;">
+                <strong style="color: #fff;">{{ stat.shifts_count }}</strong> смен ({{ stat.hours }} ч.)
+              </td>
+              <td style="padding: 1rem 1.25rem;">
+                <strong style="color: #22c55e; font-size: 1rem;">{{ stat.revenue }} ₽</strong>
+              </td>
+              <td style="padding: 1rem 1.25rem; color: #fff;">
+                {{ stat.fot }} ₽
+              </td>
+              <td style="padding: 1rem 1.25rem; text-align: right;">
+                <span style="background: rgba(250, 204, 21, 0.1); color: #facc15; border: 1px solid rgba(250, 204, 21, 0.25); padding: 0.25rem 0.6rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem;">
+                  {{ stat.rev_per_hour }} ₽/ч
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" style="padding: 2rem; text-align: center; color: #a1a1aa;">
+                За выбранный период нет данных о завершённых сменах.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Скрипт отрисовки графиков через Chart.js -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const dates = {{ chart_dates|safe }};
+      const revenues = {{ chart_revenues|safe }};
+      const fots = {{ chart_fots|safe }};
+
+      // 1. График динамики по дням
+      const ctx1 = document.getElementById('revenueChart').getContext('2d');
+      new Chart(ctx1, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [
+            {
+              label: 'Выручка (₽)',
+              data: revenues,
+              borderColor: '#22c55e',
+              backgroundColor: 'rgba(34, 197, 94, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.3
+            },
+            {
+              label: 'ФОТ (₽)',
+              data: fots,
+              borderColor: '#facc15',
+              backgroundColor: 'transparent',
+              borderWidth: 2,
+              borderDash: [4, 4],
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#a1a1aa', font: { size: 11 } } }
+          },
+          scales: {
+            x: { ticks: { color: '#a1a1aa' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color: '#a1a1aa' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+          }
+        }
+      });
+
+      // 2. График по дням недели
+      const weekdayNames = {{ weekday_names|safe }};
+      const weekdayRevenues = {{ weekday_revenues|safe }};
+
+      const ctx2 = document.getElementById('weekdayChart').getContext('2d');
+      new Chart(ctx2, {
+        type: 'bar',
+        data: {
+          labels: weekdayNames,
+          datasets: [{
+            label: 'Выручка (₽)',
+            data: weekdayRevenues,
+            backgroundColor: '#facc15',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: { ticks: { color: '#a1a1aa' }, grid: { display: false } },
+            y: { ticks: { color: '#a1a1aa' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+          }
+        }
+      });
+    });
+  </script>
+{% endblock %}
