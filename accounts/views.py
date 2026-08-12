@@ -297,6 +297,14 @@ def employee_create(request):
             employee.user = user
             employee.save()
 
+            # Локальный импорт Position для предотвращения циклического импорта
+            from shifts.models import Position
+            if employee.position and employee.position.strip():
+                Position.objects.get_or_create(
+                    organization=organization,
+                    name=employee.position.strip(),
+                )
+
         messages.success(
             request,
             f"Сотрудник «{employee.full_name}» добавлен. Логин: {username}, Пароль: {raw_password}",
@@ -414,6 +422,15 @@ def employee_edit(request, employee_id):
 
     if request.method == "POST" and form.is_valid():
         form.save()
+
+        # Локальный импорт Position для предотвращения циклического импорта
+        from shifts.models import Position
+        if employee.position and employee.position.strip():
+            Position.objects.get_or_create(
+                organization=organization,
+                name=employee.position.strip(),
+            )
+
         messages.success(request, f"Данные и финансовые настройки сотрудника «{employee.full_name}» обновлены.")
         return redirect("employee-detail", employee_id=employee.id)
 

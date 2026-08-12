@@ -25,7 +25,7 @@ from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer,
 from accounts.models import Employee
 from accounts.views import get_owner_organization
 from .forms import CloseShiftForm, ShiftScheduleForm
-from .models import Notification, PayrollAdjustment, PayrollPayment, Shift, ShiftSchedule
+from .models import Notification, PayrollAdjustment, PayrollPayment, Shift, ShiftSchedule, Event, Position
 
 
 def get_active_shift_info(shift, organization, today_date):
@@ -196,15 +196,26 @@ def schedule_view(request):
     else:
         form = ShiftScheduleForm(organization=organization, is_employee=is_employee)
 
+    # 1. Получаем смены за месяц
     schedules = ShiftSchedule.objects.filter(
         organization=organization,
         date__year=year,
         date__month=month,
     ).select_related("employee", "replaced_by")
 
-    schedules_by_date = {}
+    # 2. Получаем события за месяц вместе с должностями
+    events = Event.objects.filter(
+        organization=organization,
+        date__year=year,
+        date__month=month,
+    ).prefetch_related("target_positions")
+
+    # 3. Объединяем смены и события в единый словарь по датам
+    items_by_date = {}
     for sch in schedules:
-        schedules_by_date.setdefault(sch.date, []).append(sch)
+        items_by_date.setdefault(sch.date, []).append({"type": "shift", "data": sch})
+    for ev in events:
+        items_by_date.setdefault(ev.date, []).append({"type": "event", "data": ev})
 
     # Получаем завершенные смены за текущий месяц для связки план/факт в календаре
     completed_shifts = Shift.objects.filter(
@@ -219,12 +230,16 @@ def schedule_view(request):
     cal = calendar.Calendar(firstweekday=0)
     month_days = list(cal.itermonthdates(year, month))
 
+    # Получаем список всех должностей организации для модального окна выбора
+    positions = Position.objects.filter(organization=organization)
+
     return render(request, "shifts/schedule.html", {
         "organization": organization,
         "is_employee": is_employee,
         "employee": employee,
         "form": form,
-        "schedules_by_date": schedules_by_date,
+        "items_by_date": items_by_date,
+        "positions": positions,  # Передаем список должностей
         "completed_shifts_set": completed_shifts_set,
         "month_days": month_days,
         "selected_date": selected_date,
@@ -233,6 +248,125 @@ def schedule_view(request):
         "today": today,
         "active_page": "schedule",
     })
+
+
+@login_required
+def create_event(request):
+    """Создание нового календарного события с немедленной рассылкой уведомлений."""
+    if hasattr(request.user, "employee_profile"):
+        messages.error(request, "У вас нет прав для создания событий.")
+        return redirect("shift-schedule")
+
+    organization = get_owner_organization(request.user)
+
+    if request.method == "POST":
+        title = request.POST.get("title", "").strip()
+        date_str = request.POST.get("date")
+        color = request.POST.get("color", "#3b82f6")
+        description = request.POST.get("description", "").strip()
+        position_ids = request.POST.getlist("target_positions")
+
+        if title and date_str:
+            event_obj = Event.objects.create(
+                organization=organization,
+                title=title,
+                date=date_str,
+                color=color,
+                description=description,
+            )
+            if position_ids:
+                event_obj.target_positions.set(position_ids)
+
+            # РАССЫЛКА УВЕДОМЛЕНИЙ СОТРУДНИКАМ (для любых дат)
+            employees = Employee.objects.filter(organization=organization, is_active=True)
+            if position_ids:
+                target_positions = Position.objects.filter(id__in=position_ids)
+                target_names = list(target_positions.values_list("name", flat=True))
+                employees = employees.filter(position__in=target_names)
+
+            formatted_date = datetime.strptime(date_str, "%Y-%m-%d").strftime("%d.%m.%Y")
+            for emp in employees:
+                recipient_user = getattr(emp, "user", None)
+                if recipient_user:
+                    Notification.objects.create(
+                        organization=organization,
+                        recipient=recipient_user,
+                        title=f"Событие: {title}",
+                        message=f"Запланировано событие на {formatted_date}: {title}. {description}".strip(),
+                        category=Notification.Category.SCHEDULE,
+                        link="/shifts/schedule/",
+                    )
+
+            event_obj.is_notification_sent = True
+            event_obj.save(update_fields=["is_notification_sent"])
+
+            messages.success(request, f"Событие «{title}» успешно добавлено и разослано сотрудникам!")
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                return redirect(f"/shifts/schedule/?year={dt.year}&month={dt.month}")
+            except Exception:
+                pass
+        else:
+            messages.error(request, "Необходимо указать название и дату события.")
+
+    return redirect("shift-schedule")
+
+
+@login_required
+def update_event(request, event_id):
+    """Редактирование существующего календарного события и его целевых должностей."""
+    if hasattr(request.user, "employee_profile"):
+        messages.error(request, "У вас нет прав для редактирования событий.")
+        return redirect("shift-schedule")
+
+    organization = get_owner_organization(request.user)
+    event_obj = get_object_or_404(Event, id=event_id, organization=organization)
+
+    if request.method == "POST":
+        title = request.POST.get("title", "").strip()
+        date_str = request.POST.get("date")
+        color = request.POST.get("color", event_obj.color)
+        description = request.POST.get("description", "").strip()
+        position_ids = request.POST.getlist("target_positions")
+
+        if title and date_str:
+            event_obj.title = title
+            event_obj.date = date_str
+            event_obj.color = color
+            event_obj.description = description
+            event_obj.save()
+
+            # Обновляем список выбранных должностей
+            event_obj.target_positions.set(position_ids)
+
+            messages.success(request, f"Событие «{title}» успешно обновлено!")
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                return redirect(f"/shifts/schedule/?year={dt.year}&month={dt.month}")
+            except Exception:
+                pass
+        else:
+            messages.error(request, "Заполните обязательные поля события.")
+
+    return redirect("shift-schedule")
+
+
+@login_required
+def delete_event(request, event_id):
+    """Удаление календарного события из графика."""
+    if hasattr(request.user, "employee_profile"):
+        messages.error(request, "У вас нет прав для удаления событий.")
+        return redirect("shift-schedule")
+
+    organization = get_owner_organization(request.user)
+    event_obj = get_object_or_404(Event, id=event_id, organization=organization)
+
+    target_year, target_month = event_obj.date.year, event_obj.date.month
+    title = event_obj.title
+    event_obj.delete()
+
+    messages.success(request, f"Событие «{title}» удалено из графика.")
+    return redirect(f"/shifts/schedule/?year={target_year}&month={target_month}")
 
 
 @login_required

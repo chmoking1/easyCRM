@@ -5,6 +5,27 @@ from django.utils import timezone
 from accounts.models import Employee, Organization
 
 
+class Position(models.Model):
+    """Справочник шаблонов должностей организации."""
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="positions",
+        verbose_name="Организация",
+    )
+    name = models.CharField("Название должности", max_length=100)
+    created_at = models.DateTimeField("Создана", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Должность"
+        verbose_name_plural = "Должности"
+        unique_together = ("organization", "name")
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.organization.name})"
+
+
 class Shift(models.Model):
     class Status(models.TextChoices):
         OPEN = "open", "Открыта"
@@ -139,6 +160,7 @@ class ShiftSchedule(models.Model):
         return f"{self.employee.full_name} ({self.date}): {self.start_time.strftime('%H:%M')}-{self.end_time.strftime('%H:%M')}{rep} [{self.get_status_display()}]"
 
 
+# Модель для уведомлений, связанных с событиями в организации, такими как новые смены, изменения в графике и т.д.
 class Notification(models.Model):
     class Category(models.TextChoices):
         SCHEDULE = "schedule", "График смен"
@@ -180,6 +202,7 @@ class Notification(models.Model):
         return f"{self.title} ({self.created_at.strftime('%d.%m %H:%M')})"
 
 
+# Модель для учета выплат зарплаты сотрудникам, включая информацию о сумме, дате и комментариях.
 class PayrollPayment(models.Model):
     """Model to log salary payments issued to employees."""
 
@@ -215,6 +238,7 @@ class PayrollPayment(models.Model):
         return f"{self.employee.full_name} — {self.amount} ₽ ({self.paid_at.strftime('%d.%m.%Y')})"
 
 
+# Модель для учета штрафов и премий, которые могут быть применены к сотрудникам в рамках их выплат.
 class PayrollAdjustment(models.Model):
     class AdjustmentType(models.TextChoices):
         BONUS = "bonus", "Премия"
@@ -266,3 +290,27 @@ class PayrollAdjustment(models.Model):
     def __str__(self):
         prefix = "+" if self.adjustment_type == self.AdjustmentType.BONUS else "-"
         return f"{self.employee.full_name}: {prefix}{self.amount} ₽ ({self.reason})"
+
+
+# Модель для событий, связанных с организацией, такими как праздники, корпоративные мероприятия и т.д. 
+class Event(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="events", verbose_name="Организация")
+    title = models.CharField("Название события", max_length=255)
+    date = models.DateField("Дата")
+    color = models.CharField("Цвет (HEX)", max_length=7, default="#3b82f6")
+    description = models.TextField("Описание", blank=True)
+    target_positions = models.ManyToManyField(
+        Position,
+        blank=True,
+        related_name="events",
+        verbose_name="Для каких должностей (если пусто — для всех)",
+    )
+    is_notification_sent = models.BooleanField("Уведомление отправлено", default=False)
+
+    class Meta:
+        verbose_name = "Событие"
+        verbose_name_plural = "События"
+        ordering = ["date"]
+
+    def __str__(self):
+        return f"{self.title} ({self.date})"
