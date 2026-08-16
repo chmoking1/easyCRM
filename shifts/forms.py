@@ -101,3 +101,14 @@ class ShiftScheduleForm(forms.ModelForm):
         if is_employee:
             self.fields["employee"].required = False
             self.fields["repeat_mode"].widget = forms.HiddenInput()
+
+    def clean(self):
+        """Проверяет, что время окончания больше времени начала."""
+        cleaned_data = super().clean()
+        start_time = cleaned_data.get("start_time")
+        end_time = cleaned_data.get("end_time")
+        
+        if start_time and end_time and end_time <= start_time:
+            raise forms.ValidationError("Время окончания смены должно быть позже времени начала.")
+        
+        return cleaned_data

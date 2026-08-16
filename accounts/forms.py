@@ -73,6 +73,8 @@ class EmployeeForm(forms.ModelForm):
             "sales_percentage",
             "payout_frequency",
             "payout_days",
+            "has_medical_book",
+            "has_all_documents",
             "can_edit_schedule",
         )
         labels = {
@@ -87,6 +89,8 @@ class EmployeeForm(forms.ModelForm):
             "sales_percentage": "Процент от продаж, %",
             "payout_frequency": "График выплат",
             "payout_days": "Дни выплат",
+            "has_medical_book": "Медицинская книжка",
+            "has_all_documents": "Все документы в порядке",
             "can_edit_schedule": "Разрешено предлагать график",
         }
         widgets = {
@@ -101,6 +105,8 @@ class EmployeeForm(forms.ModelForm):
             "sales_percentage": forms.NumberInput(attrs={"placeholder": "5", "min": "0", "step": "0.01"}),
             "payout_frequency": forms.Select(attrs={"id": "id_payout_frequency"}),
             "payout_days": forms.HiddenInput(attrs={"id": "id_payout_days"}),
+            "has_medical_book": forms.CheckboxInput(attrs={"style": "width: 18px; height: 18px; accent-color: #22c55e;"}),
+            "has_all_documents": forms.CheckboxInput(attrs={"style": "width: 18px; height: 18px; accent-color: #22c55e;"}),
             "can_edit_schedule": forms.CheckboxInput(attrs={"style": "width: 18px; height: 18px; accent-color: #22c55e;"}),
         }
 
@@ -110,3 +116,29 @@ class EmployeeForm(forms.ModelForm):
 
     def clean_telegram_username(self) -> str:
         return self.cleaned_data["telegram_username"].strip().removeprefix("@")
+
+    def clean_email(self):
+        """Проверяет уникальность email в рамках организации."""
+        email = self.cleaned_data.get("email", "").strip()
+        if not email:
+            return email
+        # При создании сотрудника проверяем, нет ли уже такого email в организации
+        if not self.instance.pk:  # Только при создании
+            from .models import Employee
+            if hasattr(self, '_organization'):
+                if Employee.objects.filter(organization=self._organization, email=email).exists():
+                    raise forms.ValidationError("Сотрудник с таким email уже существует в организации.")
+        return email
+
+    def clean_phone(self):
+        """Проверяет уникальность телефона в рамках организации."""
+        phone = self.cleaned_data.get("phone", "").strip()
+        if not phone:
+            return phone
+        # При создании сотрудника проверяем, нет ли уже такого телефона в организации
+        if not self.instance.pk:  # Только при создании
+            from .models import Employee
+            if hasattr(self, '_organization'):
+                if Employee.objects.filter(organization=self._organization, phone=phone).exists():
+                    raise forms.ValidationError("Сотрудник с таким телефоном уже существует в организации.")
+        return phone

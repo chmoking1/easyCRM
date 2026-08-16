@@ -30,9 +30,6 @@ urlpatterns = [
     path("reports/pdf/", views.export_analytics_pdf, name="export-analytics-pdf"),
 
     path("schedule/event/add/", views.create_event, name="create-event"),
-
-    path("schedule/event/add/", views.create_event, name="create-event"),
     path("schedule/event/<int:event_id>/update/", views.update_event, name="update-event"),
     path("schedule/event/<int:event_id>/delete/", views.delete_event, name="delete-event"),
-
 ]

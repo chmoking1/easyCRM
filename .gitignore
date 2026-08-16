@@ -1,14 +1,48 @@
-# Python bytecode and tool caches are generated locally and never belong in Git.
+```
+# Database
+db.sqlite3
+
+# Dependencies
+venv/
+.venv/
 __pycache__/
-*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Testing
 .pytest_cache/
 .mypy_cache/
 
-# Each developer creates their own virtual environment.
-.venv/
-
-# Local environment settings may contain passwords and other secrets.
-.env
-
-# The SQLite file is a convenient local fallback; production uses PostgreSQL.
-db.sqlite3
+# Original rules preserved
+*.log
+```

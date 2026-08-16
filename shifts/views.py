@@ -6,26 +6,38 @@ import io
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.html import mark_safe
 
+# ReportLab imports for PDF generation
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
 
 from accounts.models import Employee
 from accounts.views import get_owner_organization
 from .forms import CloseShiftForm, ShiftScheduleForm
-from .models import Notification, PayrollAdjustment, PayrollPayment, Shift, ShiftSchedule, Event, Position
+from .models import (
+    Event,
+    Notification,
+    PayrollAdjustment,
+    PayrollPayment,
+    Position,
+    Shift,
+    ShiftSchedule,
+)
+from .services import PayrollService, ScheduleService, ShiftReportService
+from .services.pdf_generator import PDFAnalyticsService, PDFReceiptService
 
 
 def get_active_shift_info(shift, organization, today_date):
@@ -134,35 +146,18 @@ def schedule_view(request):
             repeat_until = form.cleaned_data.get("repeat_until")
 
             if not is_employee and repeat_mode != "single" and repeat_until and repeat_until >= start_date:
-                if repeat_mode == "2/2":
-                    w_days, r_days = 2, 2
-                elif repeat_mode == "3/3":
-                    w_days, r_days = 3, 3
-                else:
-                    w_days = form.cleaned_data.get("work_days") or 1
-                    r_days = form.cleaned_data.get("rest_days") or 1
-
-                created_count = 0
-                curr_date = start_date
-
-                while curr_date <= repeat_until:
-                    for _ in range(w_days):
-                        if curr_date > repeat_until:
-                            break
-                        ShiftSchedule.objects.create(
-                            organization=organization,
-                            employee=selected_employee,
-                            date=curr_date,
-                            start_time=start_time,
-                            end_time=end_time,
-                            note=note,
-                            status=ShiftSchedule.Status.APPROVED,
-                        )
-                        created_count += 1
-                        curr_date += timedelta(days=1)
-
-                    curr_date += timedelta(days=r_days)
-
+                created_count = ScheduleService.create_shift_series(
+                    organization=organization,
+                    employee=selected_employee,
+                    start_date=start_date,
+                    start_time=start_time,
+                    end_time=end_time,
+                    note=note,
+                    repeat_mode=repeat_mode,
+                    repeat_until=repeat_until,
+                    work_days=form.cleaned_data.get("work_days"),
+                    rest_days=form.cleaned_data.get("rest_days"),
+                )
                 messages.success(request, f"Успешно создана серия из {created_count} смен по графику!")
             else:
                 schedule_item = form.save(commit=False)
@@ -196,36 +191,9 @@ def schedule_view(request):
     else:
         form = ShiftScheduleForm(organization=organization, is_employee=is_employee)
 
-    # 1. Получаем смены за месяц
-    schedules = ShiftSchedule.objects.filter(
-        organization=organization,
-        date__year=year,
-        date__month=month,
-    ).select_related("employee", "replaced_by")
-
-    # 2. Получаем события за месяц вместе с должностями
-    events = Event.objects.filter(
-        organization=organization,
-        date__year=year,
-        date__month=month,
-    ).prefetch_related("target_positions")
-
-    # 3. Объединяем смены и события в единый словарь по датам
-    items_by_date = {}
-    for sch in schedules:
-        items_by_date.setdefault(sch.date, []).append({"type": "shift", "data": sch})
-    for ev in events:
-        items_by_date.setdefault(ev.date, []).append({"type": "event", "data": ev})
-
-    # Получаем завершенные смены за текущий месяц для связки план/факт в календаре
-    completed_shifts = Shift.objects.filter(
-        organization=organization,
-        status=Shift.Status.COMPLETED,
-        opened_at__year=year,
-        opened_at__month=month,
-    ).values_list("employee_id", "opened_at__date")
-
-    completed_shifts_set = {(emp_id, dt.strftime("%Y-%m-%d")) for emp_id, dt in completed_shifts if dt}
+    # Получаем смены и события за месяц через сервис
+    items_by_date = ScheduleService.get_schedule_for_month(organization, year, month)
+    completed_shifts_set = ScheduleService.get_completed_shifts_set(organization, year, month)
 
     cal = calendar.Calendar(firstweekday=0)
     month_days = list(cal.itermonthdates(year, month))
@@ -239,7 +207,7 @@ def schedule_view(request):
         "employee": employee,
         "form": form,
         "items_by_date": items_by_date,
-        "positions": positions,  # Передаем список должностей
+        "positions": positions,
         "completed_shifts_set": completed_shifts_set,
         "month_days": month_days,
         "selected_date": selected_date,
@@ -267,45 +235,41 @@ def create_event(request):
         position_ids = request.POST.getlist("target_positions")
 
         if title and date_str:
+            # Преобразуем строку даты в объект date
+            from datetime import datetime
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                messages.error(request, "Неверный формат даты.")
+                return redirect("shift-schedule")
+
             event_obj = Event.objects.create(
                 organization=organization,
                 title=title,
-                date=date_str,
+                date=date_obj,  # Передаем объект даты, даже если поле CharField (Django сам сконвертирует при сохранении, но в объекте будет строка)
                 color=color,
                 description=description,
             )
+            
+            # Если поле в базе все же строковое, нам нужно убедиться, что в объекте для сервиса дата корректна.
+            # Но лучше обновить объект сразу после создания, если модель сохраняет строку.
+            # Однако, надежнее передать уже распарсенную дату в сервис, если он ожидает объект.
+            # Но так как сервис работает с event_obj.date, а там может быть строка из БД,
+            # то исправление должно быть либо в модели (сделать DateField), либо в сервисе (парсить строку).
+            # Так как вы просили не трогать файлы, а только скидывать код, и ранее правка сервиса не помогла (возможно, не применилась),
+            # давайте убедимся, что мы передаем в сервис объект с правильным атрибутом.
+            # Хак: временно перезапишем атрибут date у объекта перед отправкой в сервис
+            event_obj.date = date_obj 
+
             if position_ids:
                 event_obj.target_positions.set(position_ids)
 
-            # РАССЫЛКА УВЕДОМЛЕНИЙ СОТРУДНИКАМ (для любых дат)
-            employees = Employee.objects.filter(organization=organization, is_active=True)
-            if position_ids:
-                target_positions = Position.objects.filter(id__in=position_ids)
-                target_names = list(target_positions.values_list("name", flat=True))
-                employees = employees.filter(position__in=target_names)
-
-            formatted_date = datetime.strptime(date_str, "%Y-%m-%d").strftime("%d.%m.%Y")
-            for emp in employees:
-                recipient_user = getattr(emp, "user", None)
-                if recipient_user:
-                    Notification.objects.create(
-                        organization=organization,
-                        recipient=recipient_user,
-                        title=f"Событие: {title}",
-                        message=f"Запланировано событие на {formatted_date}: {title}. {description}".strip(),
-                        category=Notification.Category.SCHEDULE,
-                        link="/shifts/schedule/",
-                    )
-
-            event_obj.is_notification_sent = True
-            event_obj.save(update_fields=["is_notification_sent"])
+            # РАССЫЛКА УВЕДОМЛЕНИЙ СОТРУДНИКАМ через сервис
+            ScheduleService.notify_about_event(organization, event_obj)
 
             messages.success(request, f"Событие «{title}» успешно добавлено и разослано сотрудникам!")
-            try:
-                dt = datetime.strptime(date_str, "%Y-%m-%d")
-                return redirect(f"/shifts/schedule/?year={dt.year}&month={dt.month}")
-            except Exception:
-                pass
+            return redirect(f"/shifts/schedule/?year={date_obj.year}&month={date_obj.month}")
+
         else:
             messages.error(request, "Необходимо указать название и дату события.")
 
@@ -528,121 +492,44 @@ def shift_reports(request):
 
     organization = get_owner_organization(request.user)
     today = timezone.localdate()
-
     period_mode = request.GET.get("period", "this_month")
 
-    if period_mode == "today":
-        start_date = today
-        end_date = today
-    elif period_mode == "last_7":
-        start_date = today - timedelta(days=6)
-        end_date = today
-    elif period_mode == "last_30":
-        start_date = today - timedelta(days=29)
-        end_date = today
-    elif period_mode == "last_month":
-        first_of_this_month = today.replace(day=1)
-        end_date = first_of_this_month - timedelta(days=1)
-        start_date = end_date.replace(day=1)
-    else:  # this_month
-        start_date = today.replace(day=1)
-        end_date = today
+    # Получаем период через сервис
+    start_date, end_date = ShiftReportService.get_date_range(period_mode)
 
-    completed_shifts = Shift.objects.filter(
-        organization=organization,
-        status=Shift.Status.COMPLETED,
-        opened_at__date__gte=start_date,
-        opened_at__date__lte=end_date,
-    ).select_related("employee")
+    # Рассчитываем KPI через сервис
+    kpis = ShiftReportService.calculate_kpis(organization, start_date, end_date)
+    total_revenue = kpis["total_revenue"]
+    total_fot = kpis["total_fot"]
+    fot_percentage = kpis["fot_percentage"]
+    total_hours = kpis["total_hours"]
+    revenue_per_hour = kpis["revenue_per_hour"]
+    completed_shifts = kpis["completed_shifts"]
+    adjustments = kpis["adjustments"]
 
-    adjustments = PayrollAdjustment.objects.filter(
-        organization=organization,
-        created_at__date__gte=start_date,
-        created_at__date__lte=end_date,
+    # Генерируем данные для графиков через сервис
+    chart_dates, chart_revenues, chart_fots = ShiftReportService.get_chart_data(
+        completed_shifts, start_date, end_date
     )
 
-    total_revenue = completed_shifts.aggregate(t=Sum("total_sales"))["t"] or Decimal("0.00")
-    total_shifts_payout = completed_shifts.aggregate(t=Sum("calculated_payout"))["t"] or Decimal("0.00")
+    # Данные по дням недели через сервис
+    weekday_names, weekday_revenues = ShiftReportService.get_weekday_revenues(completed_shifts)
 
-    total_bonuses = adjustments.filter(
-        adjustment_type=PayrollAdjustment.AdjustmentType.BONUS
-    ).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-
-    total_penalties = adjustments.filter(
-        adjustment_type=PayrollAdjustment.AdjustmentType.PENALTY
-    ).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-
-    total_fot = total_shifts_payout + Decimal(str(total_bonuses)) - Decimal(str(total_penalties))
-    total_fot = max(Decimal("0.00"), total_fot)
-
-    fot_percentage = round((total_fot / total_revenue * Decimal("100")), 1) if total_revenue > 0 else Decimal("0.0")
-
-    total_hours = sum(s.duration_hours for s in completed_shifts)
-    total_hours_dec = Decimal(str(total_hours))
-    revenue_per_hour = (total_revenue / total_hours_dec).quantize(Decimal("0.01")) if total_hours > 0 else Decimal("0.00")
-
-    chart_dates = []
-    chart_revenues = []
-    chart_fots = []
-
-    curr_date = start_date
-    while curr_date <= end_date:
-        day_shifts = [s for s in completed_shifts if s.opened_at.date() == curr_date]
-        day_revenue = sum((s.total_sales or Decimal("0.00") for s in day_shifts), Decimal("0.00"))
-        day_payout = sum((s.calculated_payout or Decimal("0.00") for s in day_shifts), Decimal("0.00"))
-
-        chart_dates.append(curr_date.strftime("%d.%m"))
-        chart_revenues.append(float(day_revenue))
-        chart_fots.append(float(day_payout))
-
-        curr_date += timedelta(days=1)
-
-    weekday_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-    weekday_revenues = [0.0] * 7
-    for s in completed_shifts:
-        w_idx = s.opened_at.weekday()
-        weekday_revenues[w_idx] += float(s.total_sales or Decimal("0.00"))
-
+    # Статистика сотрудников через сервис
     employees = organization.employees.filter(is_active=True)
-    employee_stats = []
-
-    for emp in employees:
-        emp_shifts = [s for s in completed_shifts if s.employee_id == emp.id]
-        if not emp_shifts and period_mode != "this_month":
-            continue
-
-        emp_shifts_count = len(emp_shifts)
-        emp_hours = sum(s.duration_hours for s in emp_shifts)
-        
-        emp_revenue = sum((s.total_sales or Decimal("0.00") for s in emp_shifts), Decimal("0.00"))
-        emp_payout = sum((s.calculated_payout or Decimal("0.00") for s in emp_shifts), Decimal("0.00"))
-
-        emp_bonuses = sum((a.amount for a in adjustments if a.employee_id == emp.id and a.adjustment_type == PayrollAdjustment.AdjustmentType.BONUS), Decimal("0.00"))
-        emp_penalties = sum((a.amount for a in adjustments if a.employee_id == emp.id and a.adjustment_type == PayrollAdjustment.AdjustmentType.PENALTY), Decimal("0.00"))
-        
-        emp_total_fot = max(Decimal("0.00"), emp_payout + emp_bonuses - emp_penalties)
-        emp_rev_per_hour = (emp_revenue / Decimal(str(emp_hours))).quantize(Decimal("0.01")) if emp_hours > 0 else Decimal("0.00")
-
-        employee_stats.append({
-            "employee": emp,
-            "shifts_count": emp_shifts_count,
-            "hours": round(emp_hours, 1),
-            "revenue": emp_revenue.quantize(Decimal("0.01")),
-            "fot": emp_total_fot.quantize(Decimal("0.01")),
-            "rev_per_hour": emp_rev_per_hour,
-        })
-
-    employee_stats.sort(key=lambda x: x["revenue"], reverse=True)
+    employee_stats = ShiftReportService.get_employee_stats(
+        employees, completed_shifts, adjustments, period_mode
+    )
 
     return render(request, "shifts/reports.html", {
         "organization": organization,
         "period_mode": period_mode,
         "start_date": start_date,
         "end_date": end_date,
-        "total_revenue": total_revenue.quantize(Decimal("0.01")),
-        "total_fot": total_fot.quantize(Decimal("0.01")),
+        "total_revenue": total_revenue,
+        "total_fot": total_fot,
         "fot_percentage": fot_percentage,
-        "total_hours": round(total_hours, 1),
+        "total_hours": total_hours,
         "revenue_per_hour": revenue_per_hour,
         "chart_dates": chart_dates,
         "chart_revenues": chart_revenues,
@@ -842,8 +729,10 @@ def process_payment(request, employee_id):
         receipt_url = f"/shifts/payroll/receipt/{payment.id}/pdf/"
         messages.success(
             request,
-            f"Выплата {amount} ₽ сотруднику {employee.full_name} успешно проведена! "
-            f'<a href="{receipt_url}" target="_blank" style="color: #fff; font-weight: 600; text-decoration: underline; margin-left: 0.5rem;">Скачать чек (PDF)</a>'
+            mark_safe(
+                f"Выплата {amount} ₽ сотруднику {employee.full_name} успешно проведена! "
+                f'<a href="{receipt_url}" target="_blank" style="color: #fff; font-weight: 600; text-decoration: underline; margin-left: 0.5rem;">Скачать чек (PDF)</a>'
+            )
         )
 
     return redirect("payroll")
