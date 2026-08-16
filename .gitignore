@@ -1,19 +1,30 @@
-```
 # Database
 db.sqlite3
 
 # Dependencies
 venv/
 .venv/
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py~
+*.py.class
+*.py.backup
+*.py.swp
+*.py.swo
+*.swp
+*.swo
 
 # Environment
 .env
 .env.local
 *.env.*
+
+# Migrations
+*migrations/*
 
 # Logs
 *.log
@@ -45,4 +56,3 @@ build/
 
 # Original rules preserved
 *.log
-```

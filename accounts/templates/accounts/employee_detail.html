@@ -149,14 +149,14 @@
         <div style="margin-bottom: 0.75rem;">
           <span style="font-size: 0.8rem; color: #a1a1aa; display: block;">Медицинская книжка</span>
           <strong style="font-size: 1rem; color: {% if employee.has_medical_book %}#22c55e{% else %}#ef4444{% endif %};">
-            {% if employee.has_medical_book %}Есть{% else %}Нет{% endif %}
+            {% if employee.has_medical_book %}✓ Есть{% else %}✗ Нет{% endif %}
           </strong>
         </div>
 
         <div>
           <span style="font-size: 0.8rem; color: #a1a1aa; display: block;">Все документы в порядке</span>
           <strong style="font-size: 1rem; color: {% if employee.has_all_documents %}#22c55e{% else %}#ef4444{% endif %};">
-            {% if employee.has_all_documents %}Да{% else %}Нет{% endif %}
+            {% if employee.has_all_documents %}✓ Да{% else %}✗ Нет{% endif %}
           </strong>
         </div>
       </div>
@@ -236,7 +236,6 @@
     </div>
   {% endif %}
 
-
   <!-- Модальное окно СБРОСА ПАРОЛЯ -->
   <div id="reset-password-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); align-items: center; justify-content: center; z-index: 1000;">
     <div style="background: #18181b; border: 1px solid rgba(250, 204, 21, 0.3); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 400px;">
@@ -256,4 +255,13 @@
       </form>
     </div>
   </div>
+
+  <script>
+    function openModal(id) {
+      document.getElementById(id).style.display = 'flex';
+    }
+    function closeModal(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+  </script>
 {% endblock %}
