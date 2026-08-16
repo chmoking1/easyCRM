@@ -142,6 +142,24 @@
           <strong style="font-size: 1rem; color: #fff;">{{ employee.get_payout_frequency_display|default:"Раз в неделю" }}</strong>
         </div>
       </div>
+
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 1.25rem 1.5rem; border-radius: 12px;">
+        <p class="eyebrow" style="color: #facc15; margin-bottom: 1rem;">Документы</p>
+        
+        <div style="margin-bottom: 0.75rem;">
+          <span style="font-size: 0.8rem; color: #a1a1aa; display: block;">Медицинская книжка</span>
+          <strong style="font-size: 1rem; color: {% if employee.has_medical_book %}#22c55e{% else %}#ef4444{% endif %};">
+            {% if employee.has_medical_book %}✓ Есть{% else %}✗ Нет{% endif %}
+          </strong>
+        </div>
+
+        <div>
+          <span style="font-size: 0.8rem; color: #a1a1aa; display: block;">Все документы в порядке</span>
+          <strong style="font-size: 1rem; color: {% if employee.has_all_documents %}#22c55e{% else %}#ef4444{% endif %};">
+            {% if employee.has_all_documents %}✓ Да{% else %}✗ Нет{% endif %}
+          </strong>
+        </div>
+      </div>
     </div>
   </section>
 

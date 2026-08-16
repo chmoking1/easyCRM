@@ -2,13 +2,16 @@
 Django>=5.2,<5.3
 
 # PostgreSQL driver used when the application runs outside local development.
+# Using psycopg 3.x (latest) - removed conflicting psycopg2-binary
 psycopg[binary]>=3.2,<4.0
 
 # PDF Generation
 reportlab>=4.0.0
 
-# Database/Data handling
-psycopg2-binary>=2.9.0
-
 # Utility
 python-dotenv>=1.0.0
+
+# Development & Code Quality (optional, for development environment)
+# flake8>=6.0.0
+# black>=23.0.0
+# mypy>=1.0.0

@@ -10,13 +10,18 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # A real deployment must provide SECRET_KEY through its protected environment.
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-before-production")
-
-# Debug is on locally so errors are visible; production must set DJANGO_DEBUG=0.
+# SECURITY WARNING: Never use this key in production!
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 
+if not SECRET_KEY and not DEBUG:
+    raise ValueError("DJANGO_SECRET_KEY environment variable must be set for production deployments")
+SECRET_KEY = SECRET_KEY or "unsafe-development-key-change-before-production"
+
+# Debug is on locally so errors are visible; production must set DJANGO_DEBUG=0.
+
 # Hosts are intentionally broad only in debug mode; configure real domains before launch.
-ALLOWED_HOSTS: list[str] = ["*"] if DEBUG else os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
+ALLOWED_HOSTS = ["*"] if DEBUG else os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
 
 # Installed apps provide Django's core features plus this project's account domain.
 INSTALLED_APPS = [

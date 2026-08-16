@@ -21,6 +21,9 @@ class Position(models.Model):
         verbose_name_plural = "Должности"
         unique_together = ("organization", "name")
         ordering = ["name"]
+        indexes = [
+            models.Index(fields=["organization", "name"]),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.organization.name})"
@@ -69,6 +72,12 @@ class Shift(models.Model):
         verbose_name = "Смена"
         verbose_name_plural = "Смены"
         ordering = ["-opened_at"]
+        indexes = [
+            models.Index(fields=["organization", "status"]),
+            models.Index(fields=["employee", "status"]),
+            models.Index(fields=["opened_at"]),
+            models.Index(fields=["is_paid"]),
+        ]
 
     def __str__(self):
         return f"Смена {self.employee.full_name} ({self.opened_at.strftime('%d.%m.%Y %H:%M')})"
@@ -154,6 +163,11 @@ class ShiftSchedule(models.Model):
         verbose_name = "Запланированная смена"
         verbose_name_plural = "Запланированные смены"
         ordering = ["date", "start_time"]
+        indexes = [
+            models.Index(fields=["organization", "date"]),
+            models.Index(fields=["employee", "date"]),
+            models.Index(fields=["status"]),
+        ]
 
     def __str__(self):
         rep = f" (Замена: {self.replaced_by.first_name})" if self.replaced_by else ""
@@ -197,6 +211,10 @@ class Notification(models.Model):
         verbose_name = "Уведомление"
         verbose_name_plural = "Уведомления"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["organization", "-created_at"]),
+            models.Index(fields=["recipient", "is_read"]),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.created_at.strftime('%d.%m %H:%M')})"
@@ -233,6 +251,10 @@ class PayrollPayment(models.Model):
         verbose_name = "Выплата зарплаты"
         verbose_name_plural = "Выплаты зарплаты"
         ordering = ["-paid_at"]
+        indexes = [
+            models.Index(fields=["organization", "-paid_at"]),
+            models.Index(fields=["employee", "-paid_at"]),
+        ]
 
     def __str__(self):
         return f"{self.employee.full_name} — {self.amount} ₽ ({self.paid_at.strftime('%d.%m.%Y')})"
@@ -286,6 +308,10 @@ class PayrollAdjustment(models.Model):
         verbose_name = "Штраф / Премия"
         verbose_name_plural = "Штрафы и Премии"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["organization", "-created_at"]),
+            models.Index(fields=["employee", "is_settled"]),
+        ]
 
     def __str__(self):
         prefix = "+" if self.adjustment_type == self.AdjustmentType.BONUS else "-"
@@ -311,6 +337,9 @@ class Event(models.Model):
         verbose_name = "Событие"
         verbose_name_plural = "События"
         ordering = ["date"]
+        indexes = [
+            models.Index(fields=["organization", "date"]),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.date})"
