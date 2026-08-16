@@ -93,6 +93,16 @@ class Employee(models.Model):
         blank=True,
         help_text="Для 'weekly': 1 (Пн) - 7 (Вс). Для 'biweekly': числа месяца через запятую (например, 15,30).",
     )
+    has_medical_book = models.BooleanField(
+        "Медицинская книжка",
+        default=False,
+        help_text="Отметьте, если у сотрудника есть действующая медицинская книжка",
+    )
+    has_all_documents = models.BooleanField(
+        "Все документы в порядке",
+        default=False,
+        help_text="Отметьте, если у сотрудника есть все необходимые документы (паспорт, ИНН, СНИЛС и т.д.)",
+    )
     is_active = models.BooleanField("Активен", default=True)
     can_edit_schedule = models.BooleanField(
         "Разрешено предлагать график",
@@ -104,13 +114,19 @@ class Employee(models.Model):
         verbose_name = "Сотрудник"
         verbose_name_plural = "Сотрудники"
         ordering = ["first_name", "last_name"]
-
-    def __str__(self):
-        return f"{self.full_name} ({self.organization.name})"
+        indexes = [
+            models.Index(fields=["organization", "is_active"]),
+            models.Index(fields=["email"]),
+            models.Index(fields=["phone"]),
+            models.Index(fields=["telegram_username"]),
+        ]
 
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
+
+    def __str__(self):
+        return f"{self.full_name} ({self.organization.name})"
 
     def get_payout_days_display(self):
         """Красивое представление выбранных дней выплаты."""
